@@ -7,6 +7,8 @@ edition = "2021"
 actix-web = "4.5.1"
 actix-web-actors = "4.3.0"
 futures-util = "0.3.30"
+rand = "0.8.5"
+serde = { version = "1.0.197", features = ["serde_derive"] }
 tokio = { version = "1.36.0", features = ["full"] }
 tokio-stream = "0.1.14"
 warp = "0.3.6"

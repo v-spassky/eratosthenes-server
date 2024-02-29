@@ -1,14 +1,17 @@
+use rand::{distributions::Alphanumeric, Rng};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+use warp::{hyper::Method, Filter};
 
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
+use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::ws::{Message, WebSocket};
-use warp::Filter;
 
 /// Our global unique user id counter.
 static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
@@ -17,46 +20,151 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 ///
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
-type Users = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
+type ClientSockets = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
+
+type Rooms = Arc<RwLock<HashMap<String, Room>>>;
+
+#[derive(Debug)]
+struct Room {
+    users: Vec<User>,
+    messages: Vec<ChatMessage>,
+}
+
+#[derive(Debug)]
+struct User {
+    name: String,
+    avatar_emoji: String,
+    socket_id: usize,
+}
+
+#[derive(Debug)]
+struct ChatMessage {
+    author_name: String,
+    content: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CanConnectQueryParams {
+    username: String,
+}
 
 #[tokio::main]
 async fn main() {
+    let clients_sockets = ClientSockets::default();
+    let rooms = Rooms::default();
 
-    // Keep track of all connected users, key is usize, value
-    // is a websocket sender.
-    let users = Users::default();
-    // Turn our "state" into a new Filter...
-    let users = warp::any().map(move || users.clone());
+    let cors = warp::cors()
+        .allow_origin("http://127.0.0.1:3000")
+        .allow_origin("http://localhost:3000")
+        .allow_headers(vec![
+            "User-Agent",
+            "Sec-Fetch-Mode",
+            "Referer",
+            "Origin",
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
+            "content-type",
+        ])
+        .allow_methods(&[Method::POST, Method::GET, Method::OPTIONS])
+        .build();
 
-    // GET /chat -> websocket upgrade
     let chat = warp::path("chat")
-        // The `ws()` filter will prepare Websocket handshake...
         .and(warp::ws())
-        .and(users)
-        .map(|ws: warp::ws::Ws, users| {
-            // This will call our function if the handshake succeeds.
-            ws.on_upgrade(move |socket| user_connected(socket, users))
-        });
+        .and(warp::path::param::<String>())
+        .map({
+            let clients_sockets = clients_sockets.clone();
+            let rooms = rooms.clone();
+            move |ws: warp::ws::Ws, room_id| {
+                let clients_sockets = clients_sockets.clone();
+                let rooms = rooms.clone();
+                ws.on_upgrade(|socket| user_connected(socket, clients_sockets, room_id, rooms))
+            }
+        })
+        .with(cors.clone());
 
-    // GET / -> index html
-    let index = warp::path::end().map(|| warp::reply::html(INDEX_HTML));
+    let can_connect = warp::path("can-connect")
+        .and(warp::path::param::<String>())
+        .and(warp::query::<CanConnectQueryParams>())
+        .and_then({
+            let rooms = rooms.clone();
+            move |room_id: String, CanConnectQueryParams { username }: CanConnectQueryParams| {
+                let rooms = rooms.clone();
+                async move {
+                    let room_exists = rooms.read().await.contains_key(&room_id);
+                    if !room_exists {
+                        return Ok::<_, Infallible>(
+                            "{\"canConnect\": false, \"reason\": \"Room not found.\"}".to_string(),
+                        );
+                    }
+                    let room_has_user_with_such_name = rooms
+                        .read()
+                        .await
+                        .get(&room_id)
+                        .unwrap()
+                        .users
+                        .iter()
+                        .any(|user| user.name == username);
+                    if room_has_user_with_such_name {
+                        return Ok::<_, Infallible>(format!(
+                            "{{\"canConnect\": false, \"reason\": \"User with name {}
+                            already exists in the room.\"}}",
+                            username,
+                        ));
+                    }
+                    Ok::<_, Infallible>(format!("{{\"canConnect\": {}}}", room_exists))
+                }
+            }
+        })
+        .with(cors.clone());
 
-    let routes = index.or(chat);
+    let create_room = warp::post()
+        .and(warp::path("create-room"))
+        .and_then({
+            let rooms = rooms.clone();
+            move || {
+                let rooms = rooms.clone();
+                async move {
+                    let room_id = generate_room_id();
+                    let room = Room {
+                        users: vec![],
+                        messages: vec![],
+                    };
+                    rooms.write().await.insert(room_id.clone(), room);
+                    Ok::<_, Infallible>(format!("{{\"roomId\": \"{}\"}}", room_id))
+                }
+            }
+        })
+        .with(cors.clone());
+
+    let routes = chat.or(can_connect).or(create_room).with(cors);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
 
-async fn user_connected(ws: WebSocket, users: Users) {
-    // Use a counter to assign a new unique ID for this user.
-    let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
+async fn user_connected(
+    ws: WebSocket,
+    client_sockets: ClientSockets,
+    room_id: String,
+    rooms: Rooms,
+) {
+    let socket_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
+    rooms
+        .write()
+        .await
+        .get_mut(&room_id)
+        .unwrap() // TODO: this `.unwrap()` isn't safe
+        .users
+        .push(User {
+            name: "John Doe".to_string(),
+            avatar_emoji: "👤".to_string(),
+            socket_id,
+        });
 
-    eprintln!("new chat user: {}", my_id);
+    eprintln!("new chat user: {}", socket_id);
 
     // Split the socket into a sender and receiver of messages.
+    // Use an unbounded channel to handle buffering and flushing of messages to the websocket.
     let (mut user_ws_tx, mut user_ws_rx) = ws.split();
-
-    // Use an unbounded channel to handle buffering and flushing of messages
-    // to the websocket...
     let (tx, rx) = mpsc::unbounded_channel();
     let mut rx = UnboundedReceiverStream::new(rx);
 
@@ -64,51 +172,54 @@ async fn user_connected(ws: WebSocket, users: Users) {
         while let Some(message) = rx.next().await {
             user_ws_tx
                 .send(message)
-                .unwrap_or_else(|e| { eprintln!("websocket send error: {}", e) })
+                .unwrap_or_else(|e| eprintln!("websocket send error: {}", e))
                 .await;
         }
     });
 
-    // Save the sender in our list of connected users.
-    users.write().await.insert(my_id, tx);
+    client_sockets.write().await.insert(socket_id, tx);
 
-    // user_message(my_id, Message::text(String::from("new user connected!")), &users).await;
-
-    // Return a `Future` that is basically a state machine managing
-    // this specific user's connection.
-
-    // Every time the user sends a message, broadcast it to
-    // all other users...
     while let Some(result) = user_ws_rx.next().await {
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                eprintln!("websocket error(uid={}): {}", my_id, e);
+                eprintln!("websocket error(uid={}): {}", socket_id, e);
                 break;
             }
         };
-        user_message(my_id, msg, &users).await;
+        user_message(socket_id, msg, &client_sockets, &rooms, &room_id).await;
     }
-
-    // user_ws_rx stream will keep processing as long as the user stays
-    // connected. Once they disconnect, then...
-    user_disconnected(my_id, &users).await;
+    user_disconnected(socket_id, &client_sockets).await;
 }
 
-async fn user_message(my_id: usize, msg: Message, users: &Users) {
-    // Skip any non-Text messages...
+async fn user_message(
+    socket_id: usize,
+    msg: Message,
+    users: &ClientSockets,
+    rooms: &Rooms,
+    room_id: &str,
+) {
     let msg = if let Ok(s) = msg.to_str() {
         s
     } else {
         return;
     };
 
-    let new_msg = format!("<User#{}>: {}", my_id, msg);
+    let relevant_socket_ids = rooms
+        .read()
+        .await
+        .get(room_id)
+        .unwrap() // TODO: this `.unwrap()` isn't safe
+        .users
+        .iter()
+        .filter(|user| user.socket_id != socket_id)
+        .map(|user| user.socket_id)
+        .collect::<Vec<_>>();
 
     // New message from this user, send it to everyone else (except same uid)...
     for (&uid, tx) in users.read().await.iter() {
-        if my_id != uid {
-            if let Err(_disconnected) = tx.send(Message::text(new_msg.clone())) {
+        if relevant_socket_ids.contains(&uid) {
+            if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
                 // The tx is disconnected, our `user_disconnected` code
                 // should be happening in another task, nothing more to
                 // do here.
@@ -117,57 +228,15 @@ async fn user_message(my_id: usize, msg: Message, users: &Users) {
     }
 }
 
-async fn user_disconnected(my_id: usize, users: &Users) {
+async fn user_disconnected(my_id: usize, client_sockets: &ClientSockets) {
     eprintln!("good bye user: {}", my_id);
-
-    // Stream closed up, so remove from the user list
-    users.write().await.remove(&my_id);
+    client_sockets.write().await.remove(&my_id);
 }
 
-static INDEX_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <title>Warp Chat</title>
-    </head>
-    <body>
-        <h1>Warp chat</h1>
-        <div id="chat">
-            <p><em>Connecting...</em></p>
-        </div>
-        <input type="text" id="text" />
-        <button type="button" id="send">Send</button>
-        <script type="text/javascript">
-        const chat = document.getElementById('chat');
-        const text = document.getElementById('text');
-        const uri = 'ws://' + location.host + '/chat';
-        const ws = new WebSocket(uri);
-
-        function message(data) {
-            const line = document.createElement('p');
-            line.innerText = data;
-            chat.appendChild(line);
-        }
-
-        ws.onopen = function() {
-            chat.innerHTML = '<p><em>Connected!</em></p>';
-        };
-
-        ws.onmessage = function(msg) {
-            message(msg.data);
-        };
-
-        ws.onclose = function() {
-            chat.getElementsByTagName('em')[0].innerText = 'Disconnected!';
-        };
-
-        send.onclick = function() {
-            const msg = text.value;
-            ws.send(msg);
-            text.value = '';
-
-            message('<You>: ' + msg);
-        };
-        </script>
-    </body>
-</html>
-"#;
+fn generate_room_id() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(10)
+        .map(char::from)
+        .collect()
+}
