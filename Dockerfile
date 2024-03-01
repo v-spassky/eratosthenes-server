@@ -1,9 +1,12 @@
-FROM rust:1.67 as builder
-WORKDIR /usr/src/myapp
-COPY . .
-RUN cargo install --path .
+FROM rust:1.76 as builder
+WORKDIR /usr/src/app
+RUN apt-get update && apt-get install -y musl-tools
+RUN rustup target add x86_64-unknown-linux-musl
+COPY Cargo.toml Cargo.lock ./
+COPY src src
+RUN cargo build --target x86_64-unknown-linux-musl --release
 
-FROM debian:bullseye-slim
-RUN apt-get update && apt-get install -y extra-runtime-dependencies && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /usr/local/cargo/bin/myapp /usr/local/bin/myapp
+FROM alpine:3.17
+COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/eratosthenes-server /usr/local/bin/eratosthenes-server
+EXPOSE 3030
 CMD ["eratosthenes-server"]
