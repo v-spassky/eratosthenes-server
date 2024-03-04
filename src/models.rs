@@ -7,6 +7,13 @@ pub struct Room {
 }
 
 impl Room {
+    pub fn reassign_host(&mut self) {
+        if self.users.is_empty() {
+            return;
+        }
+        self.users[0].is_host = true;
+    }
+
     pub fn users_as_json(&self) -> String {
         let users_sorted_by_score = {
             let mut users = self.users.clone();

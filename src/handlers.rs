@@ -151,6 +151,17 @@ async fn user_message(
                 .iter()
                 .map(|user| user.description_id)
                 .collect::<Vec<_>>();
+            let such_user_already_connected = rooms
+                .read()
+                .await
+                .get(room_id)
+                .unwrap() // TODO: this `.unwrap()` isn't safe
+                .users
+                .iter()
+                .any(|user| user.name == payload.username);
+            if such_user_already_connected {
+                return;
+            }
             rooms
                 .write()
                 .await
@@ -173,6 +184,16 @@ async fn user_message(
                     return;
                 }
             };
+            let user_is_host = rooms
+                .read()
+                .await
+                .get(room_id)
+                .unwrap() // TODO: this `.unwrap()` isn't safe
+                .users
+                .iter()
+                .find(|user| user.name == payload.username)
+                .unwrap() // TODO: this `.unwrap()` isn't safe
+                .is_host;
             rooms
                 .write()
                 .await
@@ -180,6 +201,14 @@ async fn user_message(
                 .unwrap() // TODO: this `.unwrap()` isn't safe
                 .users
                 .retain(|user| user.name != payload.username);
+            if user_is_host {
+                rooms
+                    .write()
+                    .await
+                    .get_mut(room_id)
+                    .unwrap() // TODO: this `.unwrap()` isn't safe
+                    .reassign_host()
+            }
         }
     }
 
