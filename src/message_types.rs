@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Debug)]
 pub struct SocketMessage {
     pub r#type: SocketMessageType,
-    pub payload: SocketMessagePayload,
+    pub payload: Option<SocketMessagePayload>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -14,6 +14,8 @@ pub enum SocketMessageType {
     UserConnected,
     #[serde(rename = "userDisconnected")]
     UserDisconnected,
+    #[serde(rename = "ping")]
+    Ping,
 }
 
 impl ToString for SocketMessageType {
@@ -22,6 +24,7 @@ impl ToString for SocketMessageType {
             SocketMessageType::ChatMessage => "chatMessage",
             SocketMessageType::UserConnected => "userConnected",
             SocketMessageType::UserDisconnected => "userDisconnected",
+            SocketMessageType::Ping => "ping",
         }
         .to_string()
     }

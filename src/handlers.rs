@@ -129,7 +129,7 @@ async fn user_message(
         SocketMessageType::ChatMessage => {}
         SocketMessageType::UserConnected => {
             let payload = match socket_message.payload {
-                SocketMessagePayload::BriefUserInfo(payload) => payload,
+                Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
                 _ => {
                     println!("Error deserializing such message: {:?}", msg);
                     return;
@@ -178,7 +178,7 @@ async fn user_message(
         }
         SocketMessageType::UserDisconnected => {
             let payload = match socket_message.payload {
-                SocketMessagePayload::BriefUserInfo(payload) => payload,
+                Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
                 _ => {
                     println!("Error deserializing such message: {:?}", msg);
                     return;
@@ -208,6 +208,19 @@ async fn user_message(
                     .get_mut(room_id)
                     .unwrap() // TODO: this `.unwrap()` isn't safe
                     .reassign_host()
+            }
+        }
+        SocketMessageType::Ping => {
+            if let Err(_disconnected) = users
+                .read()
+                .await
+                .get(&socket_id)
+                .unwrap()
+                .send(Message::text("{\"type\": \"pong\", \"payload\": null}"))
+            {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
             }
         }
     }
