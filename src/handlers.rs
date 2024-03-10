@@ -78,6 +78,27 @@ pub async fn check_if_user_can_connect(
     Ok::<_, Infallible>(format!("{{\"canConnect\": {}}}", room_exists))
 }
 
+pub async fn check_if_user_is_host(
+    rooms: storage::Rooms,
+    room_id: String,
+    username: String,
+) -> Result<String, Infallible> {
+    let room_exists = rooms.read().await.contains_key(&room_id);
+    if !room_exists {
+        return Ok::<_, Infallible>("{\"isHost\": false}".to_string());
+    }
+    let user_is_host = rooms
+        .read()
+        .await
+        .get(&room_id)
+        .unwrap()
+        .users
+        .iter()
+        .find(|user| user.name == username)
+        .map_or(false, |user| user.is_host);
+    Ok::<_, Infallible>(format!("{{\"isHost\": {}}}", user_is_host))
+}
+
 pub async fn get_users_of_room(
     rooms: storage::Rooms,
     room_id: String,
@@ -223,6 +244,7 @@ async fn user_message(
                 // do here.
             }
         }
+        _ => {}
     }
 
     let relevant_socket_ids = rooms

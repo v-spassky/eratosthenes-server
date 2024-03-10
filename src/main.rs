@@ -61,6 +61,18 @@ async fn main() {
         })
         .with(cors.clone());
 
+    let is_host = warp::path("is-host")
+        .and(warp::path::param::<String>())
+        .and(warp::query::<CanConnectQueryParams>())
+        .and_then({
+            let rooms = rooms.clone();
+            move |room_id: String, CanConnectQueryParams { username }: CanConnectQueryParams| {
+                let rooms = rooms.clone();
+                async move { handlers::check_if_user_is_host(rooms, room_id, username).await }
+            }
+        })
+        .with(cors.clone());
+
     let create_room = warp::post()
         .and(warp::path("create-room"))
         .and_then({
@@ -85,6 +97,7 @@ async fn main() {
 
     let routes = chat
         .or(can_connect)
+        .or(is_host)
         .or(create_room)
         .or(users_of_room)
         .with(cors);
