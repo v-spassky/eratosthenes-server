@@ -14,6 +14,10 @@ pub enum SocketMessageType {
     UserConnected,
     #[serde(rename = "userDisconnected")]
     UserDisconnected,
+    #[serde(rename = "gameStarted")]
+    GameStarted,
+    #[serde(rename = "gameFinished")]
+    GameFinished,
     #[serde(rename = "ping")]
     Ping,
 }
@@ -24,6 +28,8 @@ impl ToString for SocketMessageType {
             SocketMessageType::ChatMessage => "chatMessage",
             SocketMessageType::UserConnected => "userConnected",
             SocketMessageType::UserDisconnected => "userDisconnected",
+            SocketMessageType::GameStarted => "gameStarted",
+            SocketMessageType::GameFinished => "gameFinished",
             SocketMessageType::Ping => "ping",
         }
         .to_string()
