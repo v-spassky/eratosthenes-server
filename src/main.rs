@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 use warp::{hyper::Method, Filter};
 
 mod handlers;
+mod map_locations;
 mod message_types;
 mod models;
 mod storage;
@@ -95,11 +98,25 @@ async fn main() {
         })
         .with(cors.clone());
 
+    let submit_guess = warp::post()
+        .and(warp::path("submit-guess"))
+        .and(warp::path::param::<String>())
+        .and(warp::body::json())
+        .and_then({
+            let rooms = rooms.clone();
+            move |room_id: String, guess_json: HashMap<String, String>| {
+                let rooms = rooms.clone();
+                async move { handlers::submit_guess(rooms, room_id, guess_json).await }
+            }
+        })
+        .with(cors.clone());
+
     let routes = chat
         .or(can_connect)
         .or(is_host)
         .or(create_room)
         .or(users_of_room)
+        .or(submit_guess)
         .with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;

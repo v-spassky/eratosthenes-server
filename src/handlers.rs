@@ -3,6 +3,7 @@ use crate::models;
 use crate::storage;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use rand::{distributions::Alphanumeric, Rng};
+use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
@@ -111,7 +112,38 @@ pub async fn get_users_of_room(
     }
     // TODO: this `.unwrap()` isn't safe
     let users = rooms.read().await.get(&room_id).unwrap().users_as_json();
-    Ok::<_, Infallible>(format!("{{\"error\": false, \"users\":{}}}", users))
+    let room_status = rooms.read().await.get(&room_id).unwrap().status.as_json();
+    Ok::<_, Infallible>(format!("{{\"error\": false, \"users\": {}, \"status\": {}}}", users, room_status))
+}
+
+pub async fn submit_guess(
+    rooms: storage::Rooms,
+    room_id: String,
+    guess_json: HashMap<String, String>,
+) -> Result<String, Infallible> {
+    let room_exists = rooms.read().await.contains_key(&room_id);
+    if !room_exists {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    let username = guess_json.get("username").unwrap();
+    let guess = models::LatLng {
+        lat: guess_json.get("lat").unwrap().parse().unwrap(),
+        lng: guess_json.get("lng").unwrap().parse().unwrap(),
+    };
+    // TODO: this `.unwrap()` isn't safe
+    rooms
+        .write()
+        .await
+        .get_mut(&room_id)
+        .unwrap()
+        .users
+        .iter_mut()
+        .find(|user| user.name == *username)
+        .unwrap()
+        .submit_guess(guess);
+    Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
 pub async fn create_room(rooms: storage::Rooms) -> Result<String, Infallible> {
@@ -119,6 +151,9 @@ pub async fn create_room(rooms: storage::Rooms) -> Result<String, Infallible> {
     let room = models::Room {
         users: vec![],
         messages: vec![],
+        status: models::RoomStatus::Waiting {
+            previous_location: None,
+        },
     };
     rooms.write().await.insert(room_id.clone(), room);
     Ok::<_, Infallible>(format!("{{\"roomId\": \"{}\"}}", room_id))
@@ -231,6 +266,22 @@ async fn user_message(
                     .reassign_host()
             }
         }
+        SocketMessageType::GameStarted => {
+            rooms
+                .write()
+                .await
+                .get_mut(room_id)
+                .unwrap()
+                .start_playing();
+        }
+        SocketMessageType::GameFinished => {
+            rooms
+                .write()
+                .await
+                .get_mut(room_id)
+                .unwrap() // TODO: this `.unwrap()` isn't safe
+                .finish_game();
+        }
         SocketMessageType::Ping => {
             if let Err(_disconnected) = users
                 .read()
@@ -244,7 +295,6 @@ async fn user_message(
                 // do here.
             }
         }
-        _ => {}
     }
 
     let relevant_socket_ids = rooms
