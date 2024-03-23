@@ -1,9 +1,14 @@
 use crate::models::LatLng;
+use rand::Rng;
+
+static LOCATIONS: [(f64, f64); 840] = include!("street_view_locations.txt");
 
 pub fn get_random_position() -> LatLng {
+    let mut rng = rand::thread_rng();
+    let index = rng.gen_range(0..LOCATIONS.len());
     LatLng {
-        lat: 43.7479964,
-        lng: 27.406036,
+        lat: LOCATIONS[index].0,
+        lng: LOCATIONS[index].1,
     }
 }
 
