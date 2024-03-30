@@ -12,6 +12,8 @@ pub enum SocketMessageType {
     ChatMessage,
     #[serde(rename = "userConnected")]
     UserConnected,
+    #[serde(rename = "userReConnected")]
+    UserReConnected,
     #[serde(rename = "userDisconnected")]
     UserDisconnected,
     #[serde(rename = "gameStarted")]
@@ -27,6 +29,7 @@ impl ToString for SocketMessageType {
         match &self {
             SocketMessageType::ChatMessage => "chatMessage",
             SocketMessageType::UserConnected => "userConnected",
+            SocketMessageType::UserReConnected => "userReConnected",
             SocketMessageType::UserDisconnected => "userDisconnected",
             SocketMessageType::GameStarted => "gameStarted",
             SocketMessageType::GameFinished => "gameFinished",

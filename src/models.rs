@@ -89,7 +89,7 @@ pub struct User {
     pub is_host: bool,
     pub description: String,
     pub description_id: usize,
-    pub socket_id: usize,
+    pub socket_id: Option<usize>,
     pub last_guess: Option<LatLng>,
 }
 
@@ -109,7 +109,7 @@ impl User {
             is_host: room_has_no_members,
             description,
             description_id,
-            socket_id,
+            socket_id: Some(socket_id),
             last_guess: None,
         }
     }
