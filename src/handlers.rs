@@ -1,8 +1,7 @@
 use crate::message_types::{SocketMessage, SocketMessagePayload, SocketMessageType};
-use crate::models;
+use crate::models::LatLng;
 use crate::storage;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use rand::{distributions::Alphanumeric, Rng};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::sync::atomic::Ordering;
@@ -55,28 +54,17 @@ pub async fn check_if_user_can_connect(
     room_id: String,
     username: String,
 ) -> Result<String, Infallible> {
-    let room_exists = rooms.read().await.contains_key(&room_id);
-    if !room_exists {
+    if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
             "{\"canConnect\": false, \"reason\": \"Room not found.\"}".to_string(),
         );
     }
-    let room_has_user_with_such_name = rooms
-        .read()
-        .await
-        .get(&room_id)
-        .unwrap()
-        .users
-        .iter()
-        .any(|user| user.name == username);
-    if room_has_user_with_such_name {
-        return Ok::<_, Infallible>(format!(
-            "{{\"canConnect\": false, \"reason\": \"User with name {}
-            already exists in the room.\"}}",
-            username,
-        ));
+    if rooms.room_has_such_user(&room_id, &username).await {
+        return Ok::<_, Infallible>(
+            "{\"canConnect\": false, \"reason\": \"Such user already in the room.\"}".to_string(),
+        );
     }
-    Ok::<_, Infallible>(format!("{{\"canConnect\": {}}}", room_exists))
+    Ok::<_, Infallible>("{\"canConnect\": true}".to_string())
 }
 
 pub async fn check_if_user_is_host(
@@ -84,38 +72,28 @@ pub async fn check_if_user_is_host(
     room_id: String,
     username: String,
 ) -> Result<String, Infallible> {
-    let room_exists = rooms.read().await.contains_key(&room_id);
-    if !room_exists {
+    if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>("{\"isHost\": false}".to_string());
     }
-    let user_is_host = rooms
-        .read()
-        .await
-        .get(&room_id)
-        .unwrap()
-        .users
-        .iter()
-        .find(|user| user.name == username)
-        .map_or(false, |user| user.is_host);
-    Ok::<_, Infallible>(format!("{{\"isHost\": {}}}", user_is_host))
+    Ok::<_, Infallible>(format!(
+        "{{\"isHost\": {}}}",
+        rooms.user_is_host_of_the_room(&room_id, &username).await
+    ))
 }
 
 pub async fn get_users_of_room(
     rooms: storage::Rooms,
     room_id: String,
 ) -> Result<String, Infallible> {
-    let room_exists = rooms.read().await.contains_key(&room_id);
-    if !room_exists {
+    if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
             "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
         );
     }
-    // TODO: this `.unwrap()` isn't safe
-    let users = rooms.read().await.get(&room_id).unwrap().users_as_json();
-    let room_status = rooms.read().await.get(&room_id).unwrap().status.as_json();
     Ok::<_, Infallible>(format!(
         "{{\"error\": false, \"users\": {}, \"status\": {}}}",
-        users, room_status
+        rooms.users_of_room_as_json(&room_id).await,
+        rooms.room_status_as_json(&room_id).await,
     ))
 }
 
@@ -124,41 +102,22 @@ pub async fn submit_guess(
     room_id: String,
     guess_json: HashMap<String, String>,
 ) -> Result<String, Infallible> {
-    let room_exists = rooms.read().await.contains_key(&room_id);
-    if !room_exists {
+    if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
             "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
         );
     }
     let username = guess_json.get("username").unwrap();
-    let guess = models::LatLng {
+    let guess = LatLng {
         lat: guess_json.get("lat").unwrap().parse().unwrap(),
         lng: guess_json.get("lng").unwrap().parse().unwrap(),
     };
-    // TODO: this `.unwrap()` isn't safe
-    rooms
-        .write()
-        .await
-        .get_mut(&room_id)
-        .unwrap()
-        .users
-        .iter_mut()
-        .find(|user| user.name == *username)
-        .unwrap()
-        .submit_guess(guess);
+    rooms.submit_user_guess(&room_id, username, guess).await;
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
 pub async fn create_room(rooms: storage::Rooms) -> Result<String, Infallible> {
-    let room_id = generate_room_id();
-    let room = models::Room {
-        users: vec![],
-        messages: vec![],
-        status: models::RoomStatus::Waiting {
-            previous_location: None,
-        },
-    };
-    rooms.write().await.insert(room_id.clone(), room);
+    let room_id = rooms.create_room().await;
     Ok::<_, Infallible>(format!("{{\"roomId\": \"{}\"}}", room_id))
 }
 
@@ -197,48 +156,16 @@ async fn user_message(
                     return;
                 }
             };
-            let room_has_no_members = rooms
-                .read()
+            match rooms
+                .handle_new_user_connected(room_id, payload, socket_id)
                 .await
-                .get(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .is_empty();
-            let description_ids_of_room_members = rooms
-                .read()
-                .await
-                .get(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .iter()
-                .map(|user| user.description_id)
-                .collect::<Vec<_>>();
-            let such_user_already_connected = rooms
-                .read()
-                .await
-                .get(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .iter()
-                .any(|user| user.name == payload.username);
-            if such_user_already_connected {
-                eprintln!("[user_message]: user with such name already connected : {payload:?}.");
-                return;
+            {
+                Ok(_) => {}
+                Err(_) => {
+                    eprintln!("[user_message]: user with such name already connected : {msg:?}.");
+                    return;
+                }
             }
-            println!("[user_message]: adding user {payload:?} to room {room_id}.");
-            rooms
-                .write()
-                .await
-                .get_mut(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .push(models::User::new(
-                    payload.username,
-                    payload.avatar_emoji,
-                    room_has_no_members,
-                    description_ids_of_room_members,
-                    socket_id,
-                ));
         }
         SocketMessageType::UserReConnected => {
             let payload = match socket_message.payload {
@@ -249,15 +176,8 @@ async fn user_message(
                 }
             };
             rooms
-                .write()
-                .await
-                .get_mut(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .iter_mut()
-                .find(|user| user.name == payload.username)
-                .unwrap()
-                .socket_id = Some(socket_id);
+                .handle_user_reconnected(room_id, payload, socket_id)
+                .await;
             return;
         }
         SocketMessageType::UserDisconnected => {
@@ -268,47 +188,13 @@ async fn user_message(
                     return;
                 }
             };
-            let user_is_host = rooms
-                .read()
-                .await
-                .get(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .iter()
-                .find(|user| user.name == payload.username)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .is_host;
-            rooms
-                .write()
-                .await
-                .get_mut(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .users
-                .retain(|user| user.name != payload.username);
-            if user_is_host {
-                rooms
-                    .write()
-                    .await
-                    .get_mut(room_id)
-                    .unwrap() // TODO: this `.unwrap()` isn't safe
-                    .reassign_host()
-            }
+            rooms.handle_user_disconnected(room_id, payload).await;
         }
         SocketMessageType::GameStarted => {
-            rooms
-                .write()
-                .await
-                .get_mut(room_id)
-                .unwrap()
-                .start_playing();
+            rooms.handle_game_started(room_id).await;
         }
         SocketMessageType::GameFinished => {
-            rooms
-                .write()
-                .await
-                .get_mut(room_id)
-                .unwrap() // TODO: this `.unwrap()` isn't safe
-                .finish_game();
+            rooms.handle_game_finished(room_id).await;
         }
         SocketMessageType::Ping => {
             if let Err(_disconnected) = users
@@ -327,16 +213,7 @@ async fn user_message(
         }
     }
 
-    let relevant_socket_ids = rooms
-        .read()
-        .await
-        .get(room_id)
-        .unwrap() // TODO: this `.unwrap()` isn't safe
-        .users
-        .iter()
-        .filter(|user| user.socket_id != Some(socket_id)) // TODO: maybe compare by username ?
-        .map(|user| user.socket_id)
-        .collect::<Vec<_>>();
+    let relevant_socket_ids = rooms.relevant_socket_ids(room_id, socket_id).await;
 
     println!("[user_message]: broadcasting message {msg} to users: {relevant_socket_ids:?}");
 
@@ -362,29 +239,6 @@ async fn user_disconnected(
 ) {
     eprintln!("[user_disconnected]: good bye user: {user_socket_id}");
     client_sockets.write().await.remove(&user_socket_id);
-    let mut room_lock = rooms.write().await;
-    let user = room_lock
-        .get_mut(room_id)
-        .unwrap()
-        .users
-        .iter_mut()
-        .find(|user| user.socket_id == Some(user_socket_id));
-    match user {
-        Some(user) => {
-            // socket closed not on behalf of the user
-            user.socket_id = None;
-        }
-        None => {
-            println!("[user_disconnected]: user with such socket id not found: {user_socket_id}");
-        }
-    }
+    rooms.disconnect_user(room_id, user_socket_id).await;
     client_sockets.write().await.remove(&user_socket_id);
-}
-
-fn generate_room_id() -> String {
-    rand::thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(10)
-        .map(char::from)
-        .collect()
 }
