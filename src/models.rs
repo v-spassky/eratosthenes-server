@@ -83,6 +83,7 @@ impl RoomStatus {
 
 #[derive(Clone, Debug)]
 pub struct User {
+    pub id: String,
     pub name: String,
     pub avatar_emoji: String,
     pub score: u64,
@@ -95,6 +96,7 @@ pub struct User {
 
 impl User {
     pub fn new(
+        id: String,
         name: String,
         avatar_emoji: String,
         room_has_no_members: bool,
@@ -103,6 +105,7 @@ impl User {
     ) -> Self {
         let (description_id, description) = get_random_user_description(desc_exclusion_list);
         User {
+            id,
             name,
             avatar_emoji,
             score: 0,

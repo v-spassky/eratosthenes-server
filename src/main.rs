@@ -9,9 +9,15 @@ mod message_types;
 mod models;
 mod storage;
 mod user_descriptions;
+mod user_id;
 
 #[derive(Serialize, Deserialize)]
-struct CanConnectQueryParams {
+struct UserIdQueryParam {
+    user_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UsernameQueryParam {
     username: String,
 }
 
@@ -39,14 +45,15 @@ async fn main() {
     let chat = warp::path("chat")
         .and(warp::ws())
         .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
         .map({
             let clients_sockets = clients_sockets.clone();
             let rooms = rooms.clone();
-            move |ws: warp::ws::Ws, room_id| {
+            move |ws: warp::ws::Ws, room_id, UserIdQueryParam { user_id }: UserIdQueryParam| {
                 let clients_sockets = clients_sockets.clone();
                 let rooms = rooms.clone();
                 ws.on_upgrade(|socket| {
-                    handlers::user_connected(socket, clients_sockets, room_id, rooms)
+                    handlers::user_connected(socket, clients_sockets, room_id, rooms, user_id)
                 })
             }
         })
@@ -54,46 +61,51 @@ async fn main() {
 
     let can_connect = warp::path("can-connect")
         .and(warp::path::param::<String>())
-        .and(warp::query::<CanConnectQueryParams>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and(warp::query::<UsernameQueryParam>())
         .and_then({
             let rooms = rooms.clone();
-            move |room_id: String, CanConnectQueryParams { username }: CanConnectQueryParams| {
+            move |room_id: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam,
+                  UsernameQueryParam { username }: UsernameQueryParam| {
                 let rooms = rooms.clone();
-                async move { handlers::check_if_user_can_connect(rooms, room_id, username).await }
+                async move { handlers::check_if_user_can_connect(rooms, room_id, user_id, username).await }
             }
         })
         .with(cors.clone());
 
     let is_host = warp::path("is-host")
         .and(warp::path::param::<String>())
-        .and(warp::query::<CanConnectQueryParams>())
+        .and(warp::query::<UserIdQueryParam>())
         .and_then({
             let rooms = rooms.clone();
-            move |room_id: String, CanConnectQueryParams { username }: CanConnectQueryParams| {
+            move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
                 let rooms = rooms.clone();
-                async move { handlers::check_if_user_is_host(rooms, room_id, username).await }
+                async move { handlers::check_if_user_is_host(rooms, room_id, user_id).await }
             }
         })
         .with(cors.clone());
 
     let create_room = warp::post()
         .and(warp::path("create-room"))
+        .and(warp::query::<UserIdQueryParam>())
         .and_then({
             let rooms = rooms.clone();
-            move || {
+            move |UserIdQueryParam { user_id }: UserIdQueryParam| {
                 let rooms = rooms.clone();
-                async move { handlers::create_room(rooms).await }
+                async move { handlers::create_room(rooms, user_id).await }
             }
         })
         .with(cors.clone());
 
     let users_of_room = warp::path("users-of-room")
         .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
         .and_then({
             let rooms = rooms.clone();
-            move |room_id: String| {
+            move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
                 let rooms = rooms.clone();
-                async move { handlers::get_users_of_room(rooms, room_id).await }
+                async move { handlers::get_users_of_room(rooms, room_id, user_id).await }
             }
         })
         .with(cors.clone());
@@ -101,14 +113,21 @@ async fn main() {
     let submit_guess = warp::post()
         .and(warp::path("submit-guess"))
         .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
         .and(warp::body::json())
         .and_then({
             let rooms = rooms.clone();
-            move |room_id: String, guess_json: HashMap<String, String>| {
+            move |room_id: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam,
+                  guess_json: HashMap<String, String>| {
                 let rooms = rooms.clone();
-                async move { handlers::submit_guess(rooms, room_id, guess_json).await }
+                async move { handlers::submit_guess(rooms, room_id, user_id, guess_json).await }
             }
         })
+        .with(cors.clone());
+
+    let acquire_id = warp::path("acquire-id")
+        .and_then(move || async move { handlers::acquire_id().await })
         .with(cors.clone());
 
     let routes = chat
@@ -117,6 +136,7 @@ async fn main() {
         .or(create_room)
         .or(users_of_room)
         .or(submit_guess)
+        .or(acquire_id)
         .with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;
