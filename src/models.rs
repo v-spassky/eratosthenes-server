@@ -40,7 +40,9 @@ impl Room {
 
         for user in self.users.iter_mut() {
             if let Some(guess) = user.last_guess {
-                user.score += get_guess_score(guess, prev_position);
+                let last_round_score = get_guess_score(guess, prev_position);
+                user.last_round_score = Some(last_round_score);
+                user.score += last_round_score;
             }
         }
     }
@@ -68,14 +70,18 @@ pub enum RoomStatus {
 impl RoomStatus {
     pub fn as_json(&self) -> String {
         match self {
-            RoomStatus::Waiting { previous_location } => {
-                match previous_location {
-                    Some(location) => format!("{{\"type\": \"waiting\", \"previousLocation\": {}}}", location.as_json()),
-                    None => "{\"type\": \"waiting\", \"previousLocation\": null}".to_string(),
-                }
-            }
+            RoomStatus::Waiting { previous_location } => match previous_location {
+                Some(location) => format!(
+                    "{{\"type\": \"waiting\", \"previousLocation\": {}}}",
+                    location.as_json()
+                ),
+                None => "{\"type\": \"waiting\", \"previousLocation\": null}".to_string(),
+            },
             RoomStatus::Playing { current_location } => {
-                format!("{{\"type\": \"playing\", \"currentLocation\": {}}}", current_location.as_json())
+                format!(
+                    "{{\"type\": \"playing\", \"currentLocation\": {}}}",
+                    current_location.as_json()
+                )
             }
         }
     }
@@ -92,6 +98,7 @@ pub struct User {
     pub description_id: usize,
     pub socket_id: Option<usize>,
     pub last_guess: Option<LatLng>,
+    pub last_round_score: Option<u64>,
 }
 
 impl User {
@@ -114,6 +121,7 @@ impl User {
             description_id,
             socket_id: Some(socket_id),
             last_guess: None,
+            last_round_score: None,
         }
     }
 
@@ -124,19 +132,27 @@ impl User {
     pub fn as_json(&self) -> String {
         format!(
             "{{\"name\": \"{}\", \"avatarEmoji\": \"{}\", \"isHost\": {},\"score\": {},
-            \"description\": \"{}\", \"lastGuess\": {}}}",
+            \"description\": \"{}\", \"lastGuess\": {}, \"lastRoundScore\": {}}}",
             self.name,
             self.avatar_emoji,
             self.is_host,
             self.score,
             self.description,
             self.last_guess_as_json(),
+            self.last_round_score_as_json(),
         )
     }
 
     fn last_guess_as_json(&self) -> String {
         match &self.last_guess {
             Some(guess) => guess.as_json(),
+            None => "null".to_string(),
+        }
+    }
+
+    fn last_round_score_as_json(&self) -> String {
+        match &self.last_round_score {
+            Some(score) => score.to_string(),
             None => "null".to_string(),
         }
     }
