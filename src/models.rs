@@ -127,9 +127,14 @@ impl User {
         }
     }
 
-    pub fn submit_guess(&mut self, guess: LatLng) {
+    pub fn submit_guess(&mut self, guess: LatLng, room_status: RoomStatus) {
         self.last_guess = Some(guess);
-        self.submitted_guess = true;
+        if let RoomStatus::Playing {
+            current_location: _,
+        } = room_status
+        {
+            self.submitted_guess = true;
+        }
     }
 
     pub fn revoke_guess(&mut self) {

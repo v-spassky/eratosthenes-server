@@ -69,21 +69,15 @@ impl Rooms {
     }
 
     pub async fn submit_user_guess(&self, room_id: &str, user_id: &str, guess: LatLng) -> bool {
-        self.storage
-            .write()
-            .await
-            .get_mut(room_id)
-            .unwrap()
+        let mut storage_guard = self.storage.write().await;
+        let room = storage_guard.get_mut(room_id).unwrap();
+        room
             .users
             .iter_mut()
             .find(|user| user.id == *user_id)
             .unwrap()
-            .submit_guess(guess);
-        self.storage
-            .read()
-            .await
-            .get(room_id)
-            .unwrap()
+            .submit_guess(guess, room.status);
+        room
             .users
             .iter()
             .all(|user| user.submitted_guess)

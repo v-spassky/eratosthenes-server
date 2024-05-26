@@ -10,7 +10,11 @@ use std::convert::Infallible;
 use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
+use unicode_segmentation::UnicodeSegmentation;
 use warp::ws::{Message, WebSocket};
+
+const MAX_USERNAME_LENGTH: usize = 20;
+const MAX_MESSAGE_LENGTH: usize = 500;
 
 pub async fn user_connected(
     ws: WebSocket,
@@ -78,6 +82,17 @@ pub async fn check_if_user_can_connect(
     {
         return Ok::<_, Infallible>(
             "{\"canConnect\": false, \"reason\": \"Such user already in the room.\"}".to_string(),
+        );
+    }
+    if username.graphemes(true).count() > MAX_USERNAME_LENGTH {
+        eprintln!(
+            "Rejecting user access to a room because the username is too long: \
+            {} symbols when at most {} is allowed.",
+            username.len(),
+            MAX_USERNAME_LENGTH,
+        );
+        return Ok::<_, Infallible>(
+            "{\"canConnect\": false, \"reason\": \"The username is too long.\"}".to_string(),
         );
     }
     Ok::<_, Infallible>("{\"canConnect\": true}".to_string())
@@ -241,7 +256,27 @@ async fn user_message(
     }
     let socket_message = socket_message.unwrap();
     match socket_message.r#type {
-        SocketMessageType::ChatMessage => {}
+        SocketMessageType::ChatMessage => {
+            let payload = match socket_message.payload {
+                Some(SocketMessagePayload::ChatMessage(payload)) => payload,
+                _ => {
+                    eprintln!(
+                        "[user_message]: error deserializing such message (3): {:?}",
+                        msg
+                    );
+                    return;
+                }
+            };
+            if payload.content.graphemes(true).count() > MAX_MESSAGE_LENGTH {
+                eprintln!(
+                    "Rejecting a message because the it is too long: \
+                    {} symbols when at most {} is allowed.",
+                    payload.content.len(),
+                    MAX_MESSAGE_LENGTH,
+                );
+                return;
+            }
+        }
         SocketMessageType::UserConnected => {
             let payload = match socket_message.payload {
                 Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
