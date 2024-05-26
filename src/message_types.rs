@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct SocketMessage {
     pub r#type: SocketMessageType,
     pub payload: Option<SocketMessagePayload>,
@@ -20,6 +20,10 @@ pub enum SocketMessageType {
     GameStarted,
     #[serde(rename = "gameFinished")]
     GameFinished,
+    #[serde(rename = "guessSubmitted")]
+    GuessSubmitted,
+    #[serde(rename = "guessRevoked")]
+    GuessRevoked,
     #[serde(rename = "ping")]
     Ping,
 }
@@ -33,6 +37,8 @@ impl ToString for SocketMessageType {
             SocketMessageType::UserDisconnected => "userDisconnected",
             SocketMessageType::GameStarted => "gameStarted",
             SocketMessageType::GameFinished => "gameFinished",
+            SocketMessageType::GuessSubmitted => "guessSubmitted",
+            SocketMessageType::GuessRevoked => "guessRevoked",
             SocketMessageType::Ping => "ping",
         }
         .to_string()
@@ -48,20 +54,20 @@ impl Serialize for SocketMessageType {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 pub enum SocketMessagePayload {
     ChatMessage(ChatMessagePayload),
     BriefUserInfo(BriefUserInfoPayload),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ChatMessagePayload {
     pub from: String,
     pub content: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct BriefUserInfoPayload {
     pub username: String,
     #[serde(rename = "avatarEmoji")]

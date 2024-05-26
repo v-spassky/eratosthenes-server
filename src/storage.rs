@@ -68,7 +68,7 @@ impl Rooms {
             .as_json()
     }
 
-    pub async fn submit_user_guess(&self, room_id: &str, user_id: &str, guess: LatLng) {
+    pub async fn submit_user_guess(&self, room_id: &str, user_id: &str, guess: LatLng) -> bool {
         self.storage
             .write()
             .await
@@ -79,6 +79,27 @@ impl Rooms {
             .find(|user| user.id == *user_id)
             .unwrap()
             .submit_guess(guess);
+        self.storage
+            .read()
+            .await
+            .get(room_id)
+            .unwrap()
+            .users
+            .iter()
+            .all(|user| user.submitted_guess)
+    }
+
+    pub async fn revoke_user_guess(&self, room_id: &str, user_id: &str) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .users
+            .iter_mut()
+            .find(|user| user.id == *user_id)
+            .unwrap()
+            .revoke_guess();
     }
 
     pub async fn create_room(&self) -> String {
@@ -243,6 +264,15 @@ impl Rooms {
         }
     }
 
+    pub async fn finish_game(&self, room_id: &str) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .finish_game();
+    }
+
     pub async fn handle_game_started(&self, room_id: &str, client_sockets: ClientSockets) {
         self.storage
             .write()
@@ -265,6 +295,15 @@ impl Rooms {
                     .collect::<Vec<_>>();
                 let raw_msg = format!("{{\"type\":\"tick\",\"payload\":{tick}}}");
                 tokio::time::sleep(Duration::from_secs(1)).await;
+                // Check if the game was finished because all players submitted a guess
+                // before the timer counted all the way down
+                let room_status = storage_handle.read().await.get(&room_id).unwrap().status;
+                if let RoomStatus::Waiting {
+                    previous_location: _previous_location,
+                } = room_status
+                {
+                    return;
+                }
                 println!(
                     "[user_message]: broadcasting message {raw_msg} to users: {all_sockets_ids:?}"
                 );
@@ -324,6 +363,18 @@ impl Rooms {
             .map(|user| user.socket_id)
             .collect::<Vec<_>>()
     }
+
+    pub async fn all_socket_ids(&self, room_id: &str) -> Vec<Option<usize>> {
+        self.storage
+            .read()
+            .await
+            .get(room_id)
+            .unwrap()
+            .users
+            .iter()
+            .map(|user| user.socket_id)
+            .collect::<Vec<_>>()
+    }
 }
 
 fn generate_room_id() -> String {
@@ -333,7 +384,6 @@ fn generate_room_id() -> String {
         .map(char::from)
         .collect()
 }
-
 
 pub enum UserConnectedResult {
     NewUser,

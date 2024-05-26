@@ -69,7 +69,9 @@ async fn main() {
                   UserIdQueryParam { user_id }: UserIdQueryParam,
                   UsernameQueryParam { username }: UsernameQueryParam| {
                 let rooms = rooms.clone();
-                async move { handlers::check_if_user_can_connect(rooms, room_id, user_id, username).await }
+                async move {
+                    handlers::check_if_user_can_connect(rooms, room_id, user_id, username).await
+                }
             }
         })
         .with(cors.clone());
@@ -117,11 +119,31 @@ async fn main() {
         .and(warp::body::json())
         .and_then({
             let rooms = rooms.clone();
+            let clients_sockets = clients_sockets.clone();
             move |room_id: String,
                   UserIdQueryParam { user_id }: UserIdQueryParam,
                   guess_json: HashMap<String, String>| {
                 let rooms = rooms.clone();
-                async move { handlers::submit_guess(rooms, room_id, user_id, guess_json).await }
+                let clients_sockets = clients_sockets.clone();
+                async move {
+                    handlers::submit_guess(rooms, room_id, user_id, guess_json, clients_sockets)
+                        .await
+                }
+            }
+        })
+        .with(cors.clone());
+
+    let revoke_guess = warp::post()
+        .and(warp::path("revoke-guess"))
+        .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and_then({
+            let rooms = rooms.clone();
+            let clients_sockets = clients_sockets.clone();
+            move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let rooms = rooms.clone();
+                let clients_sockets = clients_sockets.clone();
+                async move { handlers::revoke_guess(rooms, room_id, user_id, clients_sockets).await }
             }
         })
         .with(cors.clone());
@@ -136,6 +158,7 @@ async fn main() {
         .or(create_room)
         .or(users_of_room)
         .or(submit_guess)
+        .or(revoke_guess)
         .or(acquire_id)
         .with(cors);
 

@@ -119,6 +119,7 @@ pub async fn submit_guess(
     room_id: String,
     user_id: String,
     guess_json: HashMap<String, String>,
+    clients_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -129,7 +130,78 @@ pub async fn submit_guess(
         lat: guess_json.get("lat").unwrap().parse().unwrap(),
         lng: guess_json.get("lng").unwrap().parse().unwrap(),
     };
-    rooms.submit_user_guess(&room_id, &user_id, guess).await;
+    let finished = rooms.submit_user_guess(&room_id, &user_id, guess).await;
+    let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
+    let msg = SocketMessage {
+        r#type: SocketMessageType::GuessSubmitted,
+        payload: None,
+    };
+    let msg = serde_json::to_string(&msg).unwrap();
+    for (&uid, tx) in clients_sockets.read().await.iter() {
+        if room_sockets_ids.contains(&Some(uid)) {
+            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+                eprintln!(
+                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                );
+            }
+        }
+    }
+    if finished {
+        rooms.finish_game(&room_id).await;
+        let msg = SocketMessage {
+            r#type: SocketMessageType::GameFinished,
+            payload: None,
+        };
+        let msg = serde_json::to_string(&msg).unwrap();
+        for (&uid, tx) in clients_sockets.read().await.iter() {
+            if room_sockets_ids.contains(&Some(uid)) {
+                if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                    // The tx is disconnected, our `user_disconnected` code
+                    // should be happening in another task, nothing more to
+                    // do here.
+                    eprintln!(
+                        "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                    );
+                }
+            }
+        }
+    }
+    Ok::<_, Infallible>(String::from("{\"error\": false}"))
+}
+
+pub async fn revoke_guess(
+    rooms: storage::Rooms,
+    room_id: String,
+    user_id: String,
+    clients_sockets: storage::ClientSockets,
+) -> Result<String, Infallible> {
+    if !rooms.such_room_exists(&room_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    rooms.revoke_user_guess(&room_id, &user_id).await;
+    let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
+    let msg = SocketMessage {
+        r#type: SocketMessageType::GuessRevoked,
+        payload: None,
+    };
+    let msg = serde_json::to_string(&msg).unwrap();
+    for (&uid, tx) in clients_sockets.read().await.iter() {
+        if room_sockets_ids.contains(&Some(uid)) {
+            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+                eprintln!(
+                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                );
+            }
+        }
+    }
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
@@ -239,6 +311,8 @@ async fn user_message(
             // TODO: delete this message type and handler
             return;
         }
+        SocketMessageType::GuessSubmitted => {}
+        SocketMessageType::GuessRevoked => {}
         SocketMessageType::Ping => {
             if let Err(_disconnected) = client_sockets
                 .read()

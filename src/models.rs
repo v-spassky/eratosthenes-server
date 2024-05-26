@@ -20,7 +20,6 @@ impl Room {
         self.status = RoomStatus::Playing {
             current_location: get_random_position(),
         };
-
         for user in self.users.iter_mut() {
             user.last_guess = None;
         }
@@ -44,6 +43,7 @@ impl Room {
                 user.last_round_score = Some(last_round_score);
                 user.score += last_round_score;
             }
+            user.submitted_guess = false;
         }
     }
 
@@ -61,7 +61,7 @@ impl Room {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum RoomStatus {
     Waiting { previous_location: Option<LatLng> },
     Playing { current_location: LatLng },
@@ -98,6 +98,7 @@ pub struct User {
     pub description_id: usize,
     pub socket_id: Option<usize>,
     pub last_guess: Option<LatLng>,
+    pub submitted_guess: bool,
     pub last_round_score: Option<u64>,
 }
 
@@ -121,18 +122,25 @@ impl User {
             description_id,
             socket_id: Some(socket_id),
             last_guess: None,
+            submitted_guess: false,
             last_round_score: None,
         }
     }
 
     pub fn submit_guess(&mut self, guess: LatLng) {
         self.last_guess = Some(guess);
+        self.submitted_guess = true;
+    }
+
+    pub fn revoke_guess(&mut self) {
+        self.submitted_guess = false;
     }
 
     pub fn as_json(&self) -> String {
         format!(
-            "{{\"name\": \"{}\", \"avatarEmoji\": \"{}\", \"isHost\": {},\"score\": {},
-            \"description\": \"{}\", \"lastGuess\": {}, \"lastRoundScore\": {}}}",
+            "{{\"name\": \"{}\", \"avatarEmoji\": \"{}\", \"isHost\": {}, \"score\": {},
+            \"description\": \"{}\", \"lastGuess\": {}, \"lastRoundScore\": {},
+            \"submittedGuess\": {}}}",
             self.name,
             self.avatar_emoji,
             self.is_host,
@@ -140,6 +148,7 @@ impl User {
             self.description,
             self.last_guess_as_json(),
             self.last_round_score_as_json(),
+            self.submitted_guess,
         )
     }
 
