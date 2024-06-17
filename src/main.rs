@@ -152,6 +152,10 @@ async fn main() {
         .and_then(move || async move { handlers::acquire_id().await })
         .with(cors.clone());
 
+    let healthcheck = warp::path("healthcheck")
+        .and_then(move || async move { handlers::healthcheck().await })
+        .with(cors.clone());
+
     let routes = chat
         .or(can_connect)
         .or(is_host)
@@ -160,6 +164,7 @@ async fn main() {
         .or(submit_guess)
         .or(revoke_guess)
         .or(acquire_id)
+        .or(healthcheck)
         .with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 3030)).await;

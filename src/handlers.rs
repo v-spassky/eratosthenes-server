@@ -227,6 +227,10 @@ pub async fn acquire_id() -> Result<String, Infallible> {
     ))
 }
 
+pub async fn healthcheck() -> Result<String, Infallible> {
+    Ok::<_, Infallible>(String::new())
+}
+
 pub async fn create_room(rooms: storage::Rooms, _user_id: String) -> Result<String, Infallible> {
     let room_id = rooms.create_room().await;
     Ok::<_, Infallible>(format!("{{\"roomId\": \"{}\"}}", room_id))
