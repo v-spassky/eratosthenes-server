@@ -129,6 +129,22 @@ pub async fn get_users_of_room(
     ))
 }
 
+pub async fn get_messages_of_room(
+    rooms: storage::Rooms,
+    room_id: String,
+    _user_id: String,
+) -> Result<String, Infallible> {
+    if !rooms.such_room_exists(&room_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    Ok::<_, Infallible>(format!(
+        "{{\"error\": false, \"messages\": {}}}",
+        rooms.room_messages_as_json(&room_id).await,
+    ))
+}
+
 pub async fn submit_guess(
     rooms: storage::Rooms,
     room_id: String,
@@ -280,6 +296,7 @@ async fn user_message(
                 );
                 return;
             }
+            rooms.add_new_message(room_id, payload).await;
         }
         SocketMessageType::UserConnected => {
             let payload = match socket_message.payload {

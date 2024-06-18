@@ -1,10 +1,12 @@
 use crate::map_locations::{get_guess_score, get_random_position};
+use crate::storage::HOW_MUCH_LAST_MESSAGES_TO_STORE;
 use crate::user_descriptions::get_random_user_description;
+use std::collections::VecDeque;
 
 #[derive(Clone, Debug)]
 pub struct Room {
     pub users: Vec<User>,
-    pub messages: Vec<ChatMessage>,
+    pub last_messages: VecDeque<ChatMessage>,
     pub status: RoomStatus,
 }
 
@@ -45,6 +47,21 @@ impl Room {
             }
             user.submitted_guess = false;
         }
+    }
+
+    pub fn add_message(&mut self, message: ChatMessage) {
+        if self.last_messages.len() >= HOW_MUCH_LAST_MESSAGES_TO_STORE {
+            self.last_messages.pop_front();
+        }
+        self.last_messages.push_back(message);
+    }
+
+    pub fn messages_as_json(&self) -> String {
+        let messages_as_json: Vec<String> = self.last_messages
+            .iter()
+            .map(|message| message.as_json())
+            .collect();
+        format!("[{}]", messages_as_json.join(","))
     }
 
     pub fn users_as_json(&self) -> String {
@@ -188,4 +205,14 @@ impl LatLng {
 pub struct ChatMessage {
     pub author_name: String,
     pub content: String,
+}
+
+impl ChatMessage {
+    pub fn as_json(&self) -> String {
+        format!(
+            "{{\"from\": \"{}\", \"content\": \"{}\"}}",
+            self.author_name,
+            self.content,
+        )
+    }
 }

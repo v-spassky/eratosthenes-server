@@ -112,6 +112,18 @@ async fn main() {
         })
         .with(cors.clone());
 
+    let messages_of_room = warp::path("messages-of-room")
+        .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and_then({
+            let rooms = rooms.clone();
+            move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let rooms = rooms.clone();
+                async move { handlers::get_messages_of_room(rooms, room_id, user_id).await }
+            }
+        })
+        .with(cors.clone());
+
     let submit_guess = warp::post()
         .and(warp::path("submit-guess"))
         .and(warp::path::param::<String>())
@@ -161,6 +173,7 @@ async fn main() {
         .or(is_host)
         .or(create_room)
         .or(users_of_room)
+        .or(messages_of_room)
         .or(submit_guess)
         .or(revoke_guess)
         .or(acquire_id)

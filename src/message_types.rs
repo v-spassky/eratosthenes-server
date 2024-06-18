@@ -1,3 +1,4 @@
+use crate::models::ChatMessage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -65,6 +66,15 @@ pub enum SocketMessagePayload {
 pub struct ChatMessagePayload {
     pub from: String,
     pub content: String,
+}
+
+impl ChatMessagePayload {
+    pub fn to_model(&self) -> ChatMessage {
+        ChatMessage {
+            author_name: self.from.clone(),
+            content: self.content.clone(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

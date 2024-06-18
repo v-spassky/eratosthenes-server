@@ -1,13 +1,15 @@
-use crate::message_types::BriefUserInfoPayload;
+use crate::message_types::{BriefUserInfoPayload, ChatMessagePayload};
 use crate::models::{LatLng, Room, RoomStatus, User};
 use rand::{distributions::Alphanumeric, Rng};
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::{atomic::AtomicUsize, Arc};
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use warp::ws::Message;
 
 pub static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
+pub const HOW_MUCH_LAST_MESSAGES_TO_STORE: usize = 30;
 
 pub type ClientSockets = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
 
@@ -58,6 +60,15 @@ impl Rooms {
             .users_as_json()
     }
 
+    pub async fn room_messages_as_json(&self, room_id: &str) -> String {
+        self.storage
+            .read()
+            .await
+            .get(room_id)
+            .unwrap()
+            .messages_as_json()
+    }
+
     pub async fn room_status_as_json(&self, room_id: &str) -> String {
         self.storage
             .read()
@@ -71,16 +82,12 @@ impl Rooms {
     pub async fn submit_user_guess(&self, room_id: &str, user_id: &str, guess: LatLng) -> bool {
         let mut storage_guard = self.storage.write().await;
         let room = storage_guard.get_mut(room_id).unwrap();
-        room
-            .users
+        room.users
             .iter_mut()
             .find(|user| user.id == *user_id)
             .unwrap()
             .submit_guess(guess, room.status);
-        room
-            .users
-            .iter()
-            .all(|user| user.submitted_guess)
+        room.users.iter().all(|user| user.submitted_guess)
     }
 
     pub async fn revoke_user_guess(&self, room_id: &str, user_id: &str) {
@@ -100,7 +107,7 @@ impl Rooms {
         let room_id = generate_room_id();
         let room = Room {
             users: vec![],
-            messages: vec![],
+            last_messages: VecDeque::with_capacity(HOW_MUCH_LAST_MESSAGES_TO_STORE),
             status: RoomStatus::Waiting {
                 previous_location: None,
             },
@@ -368,6 +375,15 @@ impl Rooms {
             .iter()
             .map(|user| user.socket_id)
             .collect::<Vec<_>>()
+    }
+
+    pub async fn add_new_message(&self, room_id: &str, message: ChatMessagePayload) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .add_message(message.to_model());
     }
 }
 
