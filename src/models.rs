@@ -44,6 +44,8 @@ impl Room {
                 let last_round_score = get_guess_score(guess, prev_position);
                 user.last_round_score = Some(last_round_score);
                 user.score += last_round_score;
+            } else {
+                user.last_round_score = None;
             }
             user.submitted_guess = false;
         }
