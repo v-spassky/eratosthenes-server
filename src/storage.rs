@@ -51,6 +51,28 @@ impl Rooms {
             .map_or(false, |user| user.is_host)
     }
 
+    pub async fn user_is_muted(&self, room_id: &str, user_id: &str) -> bool {
+        self.storage
+            .read()
+            .await
+            .get(room_id)
+            .unwrap()
+            .users
+            .iter()
+            .find(|user| user.id == user_id)
+            .map_or(false, |user| user.is_muted)
+    }
+
+    pub async fn user_is_banned(&self, room_id: &str, user_id: &String) -> bool {
+        self.storage
+            .read()
+            .await
+            .get(room_id)
+            .unwrap()
+            .banned_users_ids
+            .contains(user_id)
+    }
+
     pub async fn users_of_room_as_json(&self, room_id: &str) -> String {
         self.storage
             .read()
@@ -103,6 +125,54 @@ impl Rooms {
             .revoke_guess();
     }
 
+    pub async fn mute_user(&self, room_id: &str, user_id_to_mute: &str) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .users
+            .iter_mut()
+            .find(|user| user.name == *user_id_to_mute)
+            .unwrap()
+            .mute();
+    }
+
+    pub async fn unmute_user(&self, room_id: &str, user_id_to_unmute: &str) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .users
+            .iter_mut()
+            .find(|user| user.name == *user_id_to_unmute)
+            .unwrap()
+            .unmute();
+    }
+
+    pub async fn ban_user(&self, room_id: &str, user_name_to_ban: &str) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .ban_user(user_name_to_ban)
+    }
+
+    pub async fn change_user_score(&self, room_id: &str, username: &str, amount: i64) {
+        self.storage
+            .write()
+            .await
+            .get_mut(room_id)
+            .unwrap()
+            .users
+            .iter_mut()
+            .find(|user| user.name == *username)
+            .unwrap()
+            .change_score(amount)
+    }
+
     pub async fn create_room(&self) -> String {
         let room_id = generate_room_id();
         let room = Room {
@@ -111,6 +181,7 @@ impl Rooms {
             status: RoomStatus::Waiting {
                 previous_location: None,
             },
+            banned_users_ids: vec![],
         };
         self.storage.write().await.insert(room_id.clone(), room);
         room_id

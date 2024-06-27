@@ -30,7 +30,6 @@ pub fn user_id_is_valid(user_id: &str) -> bool {
         && user_id.chars().nth(7).unwrap_or('0') == 'R'
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

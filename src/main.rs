@@ -164,6 +164,94 @@ async fn main() {
         .and_then(move || async move { handlers::acquire_id().await })
         .with(cors.clone());
 
+    let mute_user = warp::post()
+        .and(warp::path("mute-user"))
+        .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and(warp::body::json())
+        .and_then({
+            let rooms = rooms.clone();
+            let clients_sockets = clients_sockets.clone();
+            move |room_id: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam,
+                  guess_json: HashMap<String, String>| {
+                let rooms = rooms.clone();
+                let clients_sockets = clients_sockets.clone();
+                async move {
+                    handlers::mute_user(rooms, room_id, user_id, guess_json, clients_sockets).await
+                }
+            }
+        })
+        .with(cors.clone());
+
+    let unmute_user = warp::post()
+        .and(warp::path("unmute-user"))
+        .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and(warp::body::json())
+        .and_then({
+            let rooms = rooms.clone();
+            let clients_sockets = clients_sockets.clone();
+            move |room_id: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam,
+                  guess_json: HashMap<String, String>| {
+                let rooms = rooms.clone();
+                let clients_sockets = clients_sockets.clone();
+                async move {
+                    handlers::unmute_user(rooms, room_id, user_id, guess_json, clients_sockets)
+                        .await
+                }
+            }
+        })
+        .with(cors.clone());
+
+    let ban_user = warp::post()
+        .and(warp::path("ban-user"))
+        .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and(warp::body::json())
+        .and_then({
+            let rooms = rooms.clone();
+            let clients_sockets = clients_sockets.clone();
+            move |room_id: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam,
+                  guess_json: HashMap<String, String>| {
+                let rooms = rooms.clone();
+                let clients_sockets = clients_sockets.clone();
+                async move {
+                    handlers::ban_user(rooms, room_id, user_id, guess_json, clients_sockets).await
+                }
+            }
+        })
+        .with(cors.clone());
+
+    let change_user_score = warp::post()
+        .and(warp::path("change-user-score"))
+        .and(warp::path::param::<String>())
+        .and(warp::query::<UserIdQueryParam>())
+        .and(warp::body::json())
+        .and_then({
+            let rooms = rooms.clone();
+            let clients_sockets = clients_sockets.clone();
+            move |room_id: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam,
+                  guess_json: HashMap<String, String>| {
+                let rooms = rooms.clone();
+                let clients_sockets = clients_sockets.clone();
+                async move {
+                    handlers::change_user_score(
+                        rooms,
+                        room_id,
+                        user_id,
+                        guess_json,
+                        clients_sockets,
+                    )
+                    .await
+                }
+            }
+        })
+        .with(cors.clone());
+
     let healthcheck = warp::path("healthcheck")
         .and_then(move || async move { handlers::healthcheck().await })
         .with(cors.clone());
@@ -177,6 +265,10 @@ async fn main() {
         .or(submit_guess)
         .or(revoke_guess)
         .or(acquire_id)
+        .or(mute_user)
+        .or(unmute_user)
+        .or(ban_user)
+        .or(change_user_score)
         .or(healthcheck)
         .with(cors);
 

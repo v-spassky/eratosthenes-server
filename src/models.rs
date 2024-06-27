@@ -8,6 +8,7 @@ pub struct Room {
     pub users: Vec<User>,
     pub last_messages: VecDeque<ChatMessage>,
     pub status: RoomStatus,
+    pub banned_users_ids: Vec<String>,
 }
 
 impl Room {
@@ -58,8 +59,21 @@ impl Room {
         self.last_messages.push_back(message);
     }
 
+    pub fn ban_user(&mut self, username: &str) {
+        let target_user_id = self
+            .users
+            .iter()
+            .find(|user| user.name == username)
+            .unwrap()
+            .id
+            .clone();
+        self.users.retain(|user| user.id != target_user_id);
+        self.banned_users_ids.push(target_user_id);
+    }
+
     pub fn messages_as_json(&self) -> String {
-        let messages_as_json: Vec<String> = self.last_messages
+        let messages_as_json: Vec<String> = self
+            .last_messages
             .iter()
             .map(|message| message.as_json())
             .collect();
@@ -119,6 +133,7 @@ pub struct User {
     pub last_guess: Option<LatLng>,
     pub submitted_guess: bool,
     pub last_round_score: Option<u64>,
+    pub is_muted: bool,
 }
 
 impl User {
@@ -143,6 +158,7 @@ impl User {
             last_guess: None,
             submitted_guess: false,
             last_round_score: None,
+            is_muted: false,
         }
     }
 
@@ -160,11 +176,27 @@ impl User {
         self.submitted_guess = false;
     }
 
+    pub fn mute(&mut self) {
+        self.is_muted = true;
+    }
+
+    pub fn unmute(&mut self) {
+        self.is_muted = false;
+    }
+
+    pub fn change_score(&mut self, amount: i64) {
+        if amount >= 0 {
+            self.score += amount as u64;
+        } else {
+            self.score = self.score.saturating_sub(-amount as u64);
+        }
+    }
+
     pub fn as_json(&self) -> String {
         format!(
             "{{\"name\": \"{}\", \"avatarEmoji\": \"{}\", \"isHost\": {}, \"score\": {},
             \"description\": \"{}\", \"lastGuess\": {}, \"lastRoundScore\": {},
-            \"submittedGuess\": {}}}",
+            \"submittedGuess\": {}, \"isMuted\": {}}}",
             self.name,
             self.avatar_emoji,
             self.is_host,
@@ -173,6 +205,7 @@ impl User {
             self.last_guess_as_json(),
             self.last_round_score_as_json(),
             self.submitted_guess,
+            self.is_muted,
         )
     }
 
@@ -213,8 +246,7 @@ impl ChatMessage {
     pub fn as_json(&self) -> String {
         format!(
             "{{\"from\": \"{}\", \"content\": \"{}\"}}",
-            self.author_name,
-            self.content,
+            self.author_name, self.content,
         )
     }
 }

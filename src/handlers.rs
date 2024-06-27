@@ -84,6 +84,11 @@ pub async fn check_if_user_can_connect(
             "{\"canConnect\": false, \"reason\": \"Such user already in the room.\"}".to_string(),
         );
     }
+    if rooms.user_is_banned(&room_id, &user_id).await {
+        return Ok::<_, Infallible>(
+            "{\"canConnect\": false, \"reason\": \"User is banned.\"}".to_string(),
+        );
+    }
     if username.graphemes(true).count() > MAX_USERNAME_LENGTH {
         eprintln!(
             "Rejecting user access to a room because the username is too long: \
@@ -243,6 +248,154 @@ pub async fn acquire_id() -> Result<String, Infallible> {
     ))
 }
 
+pub async fn mute_user(
+    rooms: storage::Rooms,
+    room_id: String,
+    user_id: String,
+    guess_json: HashMap<String, String>,
+    clients_sockets: storage::ClientSockets,
+) -> Result<String, Infallible> {
+    if !rooms.such_room_exists(&room_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    if !rooms.user_is_host_of_the_room(&room_id, &user_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
+        );
+    }
+    let user_id_to_mute = guess_json.get("userName").unwrap();
+    rooms.mute_user(&room_id, user_id_to_mute).await;
+    let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
+    let msg = "{\"type\": \"userMuted\", \"payload\": null}".to_string();
+    for (&uid, tx) in clients_sockets.read().await.iter() {
+        if room_sockets_ids.contains(&Some(uid)) {
+            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+                eprintln!(
+                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                );
+            }
+        }
+    }
+    Ok::<_, Infallible>(String::from("{\"error\": false}"))
+}
+
+pub async fn unmute_user(
+    rooms: storage::Rooms,
+    room_id: String,
+    user_id: String,
+    guess_json: HashMap<String, String>,
+    clients_sockets: storage::ClientSockets,
+) -> Result<String, Infallible> {
+    if !rooms.such_room_exists(&room_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    let user_id_to_unmute = guess_json.get("userName").unwrap();
+    if !rooms.user_is_host_of_the_room(&room_id, &user_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
+        );
+    }
+    rooms.unmute_user(&room_id, user_id_to_unmute).await;
+    let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
+    let msg = "{\"type\": \"userUnmuted\", \"payload\": {\"username\":}}".to_string();
+    for (&uid, tx) in clients_sockets.read().await.iter() {
+        if room_sockets_ids.contains(&Some(uid)) {
+            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+                eprintln!(
+                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                );
+            }
+        }
+    }
+    Ok::<_, Infallible>(String::from("{\"error\": false}"))
+}
+
+pub async fn ban_user(
+    rooms: storage::Rooms,
+    room_id: String,
+    user_id: String,
+    guess_json: HashMap<String, String>,
+    clients_sockets: storage::ClientSockets,
+) -> Result<String, Infallible> {
+    if !rooms.such_room_exists(&room_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    if !rooms.user_is_host_of_the_room(&room_id, &user_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
+        );
+    }
+    let user_name_to_ban = guess_json.get("username").unwrap();
+    let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
+    rooms.ban_user(&room_id, user_name_to_ban).await;
+    let msg = format!(
+        "{{\"type\": \"userBanned\", \"payload\": {{\"username\": \"{}\"}}}}",
+        user_name_to_ban,
+    );
+    for (&uid, tx) in clients_sockets.read().await.iter() {
+        if room_sockets_ids.contains(&Some(uid)) {
+            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+                eprintln!(
+                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                );
+            }
+        }
+    }
+    Ok::<_, Infallible>(String::from("{\"error\": false}"))
+}
+
+pub async fn change_user_score(
+    rooms: storage::Rooms,
+    room_id: String,
+    user_id: String,
+    guess_json: HashMap<String, String>,
+    clients_sockets: storage::ClientSockets,
+) -> Result<String, Infallible> {
+    if !rooms.such_room_exists(&room_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
+        );
+    }
+    if !rooms.user_is_host_of_the_room(&room_id, &user_id).await {
+        return Ok::<_, Infallible>(
+            "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
+        );
+    }
+    let username = guess_json.get("username").unwrap();
+    let amount = guess_json.get("amount").unwrap().parse::<i64>().unwrap();
+    let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
+    rooms.change_user_score(&room_id, username, amount).await;
+    let msg = "{\"type\": \"userScoreChanged\", \"payload\": null}".to_string();
+    for (&uid, tx) in clients_sockets.read().await.iter() {
+        if room_sockets_ids.contains(&Some(uid)) {
+            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+                // The tx is disconnected, our `user_disconnected` code
+                // should be happening in another task, nothing more to
+                // do here.
+                eprintln!(
+                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
+                );
+            }
+        }
+    }
+    Ok::<_, Infallible>(String::from("{\"error\": false}"))
+}
+
 pub async fn healthcheck() -> Result<String, Infallible> {
     Ok::<_, Infallible>(String::new())
 }
@@ -277,6 +430,9 @@ async fn user_message(
     let socket_message = socket_message.unwrap();
     match socket_message.r#type {
         SocketMessageType::ChatMessage => {
+            if rooms.user_is_muted(room_id, user_id).await {
+                return;
+            }
             let payload = match socket_message.payload {
                 Some(SocketMessagePayload::ChatMessage(payload)) => payload,
                 _ => {
