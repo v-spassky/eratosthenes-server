@@ -1,5 +1,5 @@
 use crate::map_locations::{get_guess_score, get_random_position};
-use crate::storage::HOW_MUCH_LAST_MESSAGES_TO_STORE;
+use crate::storage::{HOW_MUCH_LAST_MESSAGES_TO_STORE, ROUNDS_PER_GAME};
 use crate::user_descriptions::get_random_user_description;
 use std::collections::VecDeque;
 
@@ -9,6 +9,7 @@ pub struct Room {
     pub last_messages: VecDeque<ChatMessage>,
     pub status: RoomStatus,
     pub banned_users_ids: Vec<String>,
+    pub rounds_left: u64,
 }
 
 impl Room {
@@ -20,26 +21,29 @@ impl Room {
     }
 
     pub fn start_playing(&mut self) {
+        let new_game = self.rounds_left == ROUNDS_PER_GAME;
         self.status = RoomStatus::Playing {
             current_location: get_random_position(),
         };
         for user in self.users.iter_mut() {
             user.last_guess = None;
+            if new_game {
+                user.score = 0;
+            }
         }
     }
 
-    pub fn finish_game(&mut self) {
+    pub fn finish_game(&mut self) -> bool {
         let prev_position = match &self.status {
             RoomStatus::Playing { current_location } => *current_location,
             _ => {
                 eprintln!("Tried to finish game when not playing");
-                return;
+                return self.rounds_left == 0;
             }
         };
         self.status = RoomStatus::Waiting {
             previous_location: Some(prev_position),
         };
-
         for user in self.users.iter_mut() {
             if let Some(guess) = user.last_guess {
                 let last_round_score = get_guess_score(guess, prev_position);
@@ -50,6 +54,12 @@ impl Room {
             }
             user.submitted_guess = false;
         }
+        self.rounds_left = self.rounds_left.saturating_sub(1);
+        let game_finished = self.rounds_left == 0;
+        if game_finished {
+            self.rounds_left = ROUNDS_PER_GAME;
+        }
+        game_finished
     }
 
     pub fn add_message(&mut self, message: ChatMessage) {

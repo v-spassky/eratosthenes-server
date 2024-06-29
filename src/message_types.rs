@@ -17,10 +17,10 @@ pub enum SocketMessageType {
     UserReConnected,
     #[serde(rename = "userDisconnected")]
     UserDisconnected,
-    #[serde(rename = "gameStarted")]
-    GameStarted,
-    #[serde(rename = "gameFinished")]
-    GameFinished,
+    #[serde(rename = "roundStarted")]
+    RoundStarted,
+    #[serde(rename = "roundFinished")]
+    RoundFinished,
     #[serde(rename = "guessSubmitted")]
     GuessSubmitted,
     #[serde(rename = "guessRevoked")]
@@ -36,8 +36,8 @@ impl ToString for SocketMessageType {
             SocketMessageType::UserConnected => "userConnected",
             SocketMessageType::UserReConnected => "userReConnected",
             SocketMessageType::UserDisconnected => "userDisconnected",
-            SocketMessageType::GameStarted => "gameStarted",
-            SocketMessageType::GameFinished => "gameFinished",
+            SocketMessageType::RoundStarted => "roundStarted",
+            SocketMessageType::RoundFinished => "roundFinished",
             SocketMessageType::GuessSubmitted => "guessSubmitted",
             SocketMessageType::GuessRevoked => "guessRevoked",
             SocketMessageType::Ping => "ping",

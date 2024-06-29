@@ -166,7 +166,7 @@ pub async fn submit_guess(
         lat: guess_json.get("lat").unwrap().parse().unwrap(),
         lng: guess_json.get("lng").unwrap().parse().unwrap(),
     };
-    let finished = rooms.submit_user_guess(&room_id, &user_id, guess).await;
+    let round_finished = rooms.submit_user_guess(&room_id, &user_id, guess).await;
     let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
     let msg = SocketMessage {
         r#type: SocketMessageType::GuessSubmitted,
@@ -185,13 +185,13 @@ pub async fn submit_guess(
             }
         }
     }
-    if finished {
-        rooms.finish_game(&room_id).await;
-        let msg = SocketMessage {
-            r#type: SocketMessageType::GameFinished,
-            payload: None,
+    if round_finished {
+        let game_finished = rooms.finish_game(&room_id).await;
+        let msg = if game_finished {
+            "{\"type\":\"gameFinished\",\"payload\":null}".to_string()
+        } else {
+            "{\"type\":\"roundFinished\",\"payload\":null}".to_string()
         };
-        let msg = serde_json::to_string(&msg).unwrap();
         for (&uid, tx) in clients_sockets.read().await.iter() {
             if room_sockets_ids.contains(&Some(uid)) {
                 if let Err(_disconnected) = tx.send(Message::text(&msg)) {
@@ -304,7 +304,7 @@ pub async fn unmute_user(
     }
     rooms.unmute_user(&room_id, user_id_to_unmute).await;
     let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
-    let msg = "{\"type\": \"userUnmuted\", \"payload\": {\"username\":}}".to_string();
+    let msg = "{\"type\": \"userUnmuted\", \"payload\": null}".to_string();
     for (&uid, tx) in clients_sockets.read().await.iter() {
         if room_sockets_ids.contains(&Some(uid)) {
             if let Err(_disconnected) = tx.send(Message::text(&msg)) {
@@ -511,13 +511,13 @@ async fn user_message(
                 .await;
             return;
         }
-        SocketMessageType::GameStarted => {
+        SocketMessageType::RoundStarted => {
             // TODO: Check if the user is host
             rooms
                 .handle_game_started(room_id, client_sockets.clone())
                 .await;
         }
-        SocketMessageType::GameFinished => {
+        SocketMessageType::RoundFinished => {
             // TODO: Check if the user is host + this should be coming from the server, not the client
             // rooms.handle_game_finished(room_id).await;
             // TODO: delete this message type and handler

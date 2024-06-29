@@ -10,6 +10,7 @@ use warp::ws::Message;
 
 pub static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 pub const HOW_MUCH_LAST_MESSAGES_TO_STORE: usize = 30;
+pub const ROUNDS_PER_GAME: u64 = 10;
 
 pub type ClientSockets = Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>;
 
@@ -182,6 +183,7 @@ impl Rooms {
                 previous_location: None,
             },
             banned_users_ids: vec![],
+            rounds_left: ROUNDS_PER_GAME,
         };
         self.storage.write().await.insert(room_id.clone(), room);
         room_id
@@ -336,13 +338,13 @@ impl Rooms {
         }
     }
 
-    pub async fn finish_game(&self, room_id: &str) {
+    pub async fn finish_game(&self, room_id: &str) -> bool {
         self.storage
             .write()
             .await
             .get_mut(room_id)
             .unwrap()
-            .finish_game();
+            .finish_game()
     }
 
     pub async fn handle_game_started(&self, room_id: &str, client_sockets: ClientSockets) {
@@ -392,7 +394,7 @@ impl Rooms {
                     }
                 }
             }
-            storage_handle
+            let game_finished = storage_handle
                 .write()
                 .await
                 .get_mut(&room_id)
@@ -407,15 +409,19 @@ impl Rooms {
                 .iter()
                 .map(|user| user.socket_id)
                 .collect::<Vec<_>>();
-            let finish_msg = "{\"type\":\"gameFinished\",\"payload\":null}".to_string();
+            let msg = if game_finished {
+                "{\"type\":\"gameFinished\",\"payload\":null}".to_string()
+            } else {
+                "{\"type\":\"roundFinished\",\"payload\":null}".to_string()
+            };
             for (&uid, tx) in client_sockets.read().await.iter() {
                 if all_sockets_ids.contains(&Some(uid)) {
-                    if let Err(_disconnected) = tx.send(Message::text(finish_msg.clone())) {
+                    if let Err(_disconnected) = tx.send(Message::text(msg.clone())) {
                         // The tx is disconnected, our `user_disconnected` code
                         // should be happening in another task, nothing more to
                         // do here.
                         eprintln!(
-                            "[user_message]: error broadcasting message {finish_msg} to user ith id {uid:?}"
+                            "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
                         );
                     }
                 }
