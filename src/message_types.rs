@@ -71,7 +71,8 @@ pub struct ChatMessagePayload {
 impl ChatMessagePayload {
     pub fn to_model(&self) -> ChatMessage {
         ChatMessage {
-            author_name: self.from.clone(),
+            is_from_bot: false,
+            author_name: Some(self.from.clone()),
             content: self.content.clone(),
         }
     }

@@ -1,13 +1,12 @@
 use crate::message_types::{SocketMessage, SocketMessagePayload, SocketMessageType};
-use crate::models::LatLng;
+use crate::models::{ChatMessage, LatLng};
 use crate::{
-    storage::{self, UserConnectedResult},
+    storage::{self, UserConnectedResult, ROUNDS_PER_GAME},
     user_id,
 };
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use std::collections::HashMap;
 use std::convert::Infallible;
-use std::sync::atomic::Ordering;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use unicode_segmentation::UnicodeSegmentation;
@@ -23,10 +22,6 @@ pub async fn user_connected(
     rooms: storage::Rooms,
     user_id: String,
 ) {
-    let socket_id = storage::NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
-
-    println!("[user_connected]: assigned ID {socket_id} to the new user.");
-
     // Split the socket into a sender and receiver of messages.
     // Use an unbounded channel to handle buffering and flushing of messages to the websocket.
     let (mut user_ws_tx, mut user_ws_rx) = ws.split();
@@ -42,7 +37,7 @@ pub async fn user_connected(
         }
     });
 
-    client_sockets.write().await.insert(socket_id, tx);
+    let socket_id = client_sockets.add(tx).await;
 
     while let Some(result) = user_ws_rx.next().await {
         let msg = match result {
@@ -155,7 +150,7 @@ pub async fn submit_guess(
     room_id: String,
     user_id: String,
     guess_json: HashMap<String, String>,
-    clients_sockets: storage::ClientSockets,
+    client_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -173,18 +168,7 @@ pub async fn submit_guess(
         payload: None,
     };
     let msg = serde_json::to_string(&msg).unwrap();
-    for (&uid, tx) in clients_sockets.read().await.iter() {
-        if room_sockets_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     if round_finished {
         let game_finished = rooms.finish_game(&room_id).await;
         let msg = if game_finished {
@@ -192,18 +176,27 @@ pub async fn submit_guess(
         } else {
             "{\"type\":\"roundFinished\",\"payload\":null}".to_string()
         };
-        for (&uid, tx) in clients_sockets.read().await.iter() {
-            if room_sockets_ids.contains(&Some(uid)) {
-                if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                    // The tx is disconnected, our `user_disconnected` code
-                    // should be happening in another task, nothing more to
-                    // do here.
-                    eprintln!(
-                        "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                    );
-                }
-            }
-        }
+        let rounds_left = rooms.get_current_round_number(&room_id).await;
+        let round_number = match rounds_left {
+            ROUNDS_PER_GAME => ROUNDS_PER_GAME,
+            _ => ROUNDS_PER_GAME - rounds_left,
+        };
+        let bot_msg_content = format!("Раунд {round_number}/{ROUNDS_PER_GAME} закончился.");
+        let bot_msg = format!(
+            "{{\"type\": \"chatMessage\", \"payload\": {{\"from\": null,
+            \"content\": \"{}\", \"isFromBot\": true}}}}",
+            bot_msg_content,
+        );
+        let bot_message = ChatMessage {
+            is_from_bot: true,
+            author_name: None,
+            content: bot_msg_content,
+        };
+        rooms.add_new_message(&room_id, bot_message).await;
+        client_sockets
+            .broadcast_msg(&bot_msg, &room_sockets_ids)
+            .await;
+        client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     }
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
@@ -212,7 +205,7 @@ pub async fn revoke_guess(
     rooms: storage::Rooms,
     room_id: String,
     user_id: String,
-    clients_sockets: storage::ClientSockets,
+    client_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -226,18 +219,7 @@ pub async fn revoke_guess(
         payload: None,
     };
     let msg = serde_json::to_string(&msg).unwrap();
-    for (&uid, tx) in clients_sockets.read().await.iter() {
-        if room_sockets_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
@@ -253,7 +235,7 @@ pub async fn mute_user(
     room_id: String,
     user_id: String,
     guess_json: HashMap<String, String>,
-    clients_sockets: storage::ClientSockets,
+    client_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -269,18 +251,7 @@ pub async fn mute_user(
     rooms.mute_user(&room_id, user_id_to_mute).await;
     let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
     let msg = "{\"type\": \"userMuted\", \"payload\": null}".to_string();
-    for (&uid, tx) in clients_sockets.read().await.iter() {
-        if room_sockets_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
@@ -289,7 +260,7 @@ pub async fn unmute_user(
     room_id: String,
     user_id: String,
     guess_json: HashMap<String, String>,
-    clients_sockets: storage::ClientSockets,
+    client_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -305,18 +276,7 @@ pub async fn unmute_user(
     rooms.unmute_user(&room_id, user_id_to_unmute).await;
     let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
     let msg = "{\"type\": \"userUnmuted\", \"payload\": null}".to_string();
-    for (&uid, tx) in clients_sockets.read().await.iter() {
-        if room_sockets_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
@@ -325,7 +285,7 @@ pub async fn ban_user(
     room_id: String,
     user_id: String,
     guess_json: HashMap<String, String>,
-    clients_sockets: storage::ClientSockets,
+    client_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -344,18 +304,7 @@ pub async fn ban_user(
         "{{\"type\": \"userBanned\", \"payload\": {{\"username\": \"{}\"}}}}",
         user_name_to_ban,
     );
-    for (&uid, tx) in clients_sockets.read().await.iter() {
-        if room_sockets_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
@@ -364,7 +313,7 @@ pub async fn change_user_score(
     room_id: String,
     user_id: String,
     guess_json: HashMap<String, String>,
-    clients_sockets: storage::ClientSockets,
+    client_sockets: storage::ClientSockets,
 ) -> Result<String, Infallible> {
     if !rooms.such_room_exists(&room_id).await {
         return Ok::<_, Infallible>(
@@ -381,18 +330,7 @@ pub async fn change_user_score(
     let room_sockets_ids = rooms.all_socket_ids(&room_id).await;
     rooms.change_user_score(&room_id, username, amount).await;
     let msg = "{\"type\": \"userScoreChanged\", \"payload\": null}".to_string();
-    for (&uid, tx) in clients_sockets.read().await.iter() {
-        if room_sockets_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(&msg)) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets.broadcast_msg(&msg, &room_sockets_ids).await;
     Ok::<_, Infallible>(String::from("{\"error\": false}"))
 }
 
@@ -427,6 +365,7 @@ async fn user_message(
         );
         return;
     }
+    let relevant_socket_ids = rooms.relevant_socket_ids(room_id, socket_id).await;
     let socket_message = socket_message.unwrap();
     match socket_message.r#type {
         SocketMessageType::ChatMessage => {
@@ -452,11 +391,30 @@ async fn user_message(
                 );
                 return;
             }
-            rooms.add_new_message(room_id, payload).await;
+            rooms.add_new_message(room_id, payload.to_model()).await;
         }
         SocketMessageType::UserConnected => {
             let payload = match socket_message.payload {
-                Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
+                Some(SocketMessagePayload::BriefUserInfo(payload)) => {
+                    if !rooms.room_has_user_with_such_id(room_id, user_id).await {
+                        let content = format!("К нам присоединился {}!", payload.username);
+                        let msg = format!(
+                            "{{\"type\": \"chatMessage\", \"payload\": {{\"from\": null,
+                            \"content\": \"{}\", \"isFromBot\": true}}}}",
+                            content,
+                        );
+                        let mut all_sockets_ids = relevant_socket_ids.clone();
+                        all_sockets_ids.push(Some(socket_id));
+                        let bot_message = ChatMessage {
+                            is_from_bot: true,
+                            author_name: None,
+                            content,
+                        };
+                        rooms.add_new_message(room_id, bot_message).await;
+                        client_sockets.broadcast_msg(&msg, &all_sockets_ids).await;
+                    }
+                    payload
+                }
                 _ => {
                     eprintln!(
                         "[user_message]: error deserializing such message (3): {:?}",
@@ -483,7 +441,7 @@ async fn user_message(
             let payload = match socket_message.payload {
                 Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
                 _ => {
-                    println!("[user_message]: error deserializing such message (4): {msg:?}");
+                    eprintln!("[user_message]: error deserializing such message (4): {msg:?}");
                     return;
                 }
             };
@@ -496,7 +454,7 @@ async fn user_message(
             let _payload = match socket_message.payload {
                 Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
                 _ => {
-                    println!("[user_message]: error deserializing such message (5): {msg:?}");
+                    eprintln!("[user_message]: error deserializing such message (5): {msg:?}");
                     return;
                 }
             };
@@ -513,51 +471,46 @@ async fn user_message(
         }
         SocketMessageType::RoundStarted => {
             // TODO: Check if the user is host
+            let rounds_left = rooms.get_current_round_number(room_id).await;
+            let round_number = match rounds_left {
+                0 => ROUNDS_PER_GAME,
+                _ => ROUNDS_PER_GAME + 1 - rounds_left,
+            };
+            let content = format!("Раунд {round_number}/{ROUNDS_PER_GAME} начался.");
+            let msg = format!(
+                "{{\"type\": \"chatMessage\", \"payload\": {{\"from\": null,
+                \"content\": \"{}\", \"isFromBot\": true}}}}",
+                content,
+            );
+            let mut all_sockets_ids = relevant_socket_ids.clone();
+            all_sockets_ids.push(Some(socket_id));
+            let bot_message = ChatMessage {
+                is_from_bot: true,
+                author_name: None,
+                content,
+            };
+            rooms.add_new_message(room_id, bot_message).await;
+            client_sockets.broadcast_msg(&msg, &all_sockets_ids).await;
             rooms
                 .handle_game_started(room_id, client_sockets.clone())
                 .await;
         }
         SocketMessageType::RoundFinished => {
             // TODO: Check if the user is host + this should be coming from the server, not the client
-            // rooms.handle_game_finished(room_id).await;
             // TODO: delete this message type and handler
             return;
         }
         SocketMessageType::GuessSubmitted => {}
         SocketMessageType::GuessRevoked => {}
         SocketMessageType::Ping => {
-            if let Err(_disconnected) = client_sockets
-                .read()
-                .await
-                .get(&socket_id)
-                .unwrap()
-                .send(Message::text("{\"type\": \"pong\", \"payload\": null}"))
-            {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!("[user_message]: error sending pong to user: {socket_id:?}")
-            }
+            let msg = "{\"type\": \"pong\", \"payload\": null}";
+            client_sockets.send_msg(msg, socket_id).await;
             return;
         }
     }
-
-    let relevant_socket_ids = rooms.relevant_socket_ids(room_id, socket_id).await;
-
-    println!("[user_message]: broadcasting message {msg} to users: {relevant_socket_ids:?}");
-
-    for (&uid, tx) in client_sockets.read().await.iter() {
-        if relevant_socket_ids.contains(&Some(uid)) {
-            if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-                eprintln!(
-                    "[user_message]: error broadcasting message {msg} to user ith id {uid:?}"
-                );
-            }
-        }
-    }
+    client_sockets
+        .broadcast_msg(msg, &relevant_socket_ids)
+        .await;
 }
 
 async fn user_disconnected(
@@ -568,7 +521,6 @@ async fn user_disconnected(
     _user_id: &str,
 ) {
     eprintln!("[user_disconnected]: good bye user: {user_socket_id}");
-    client_sockets.write().await.remove(&user_socket_id);
+    client_sockets.remove(user_socket_id).await;
     rooms.disconnect_user(room_id, user_socket_id).await;
-    // client_sockets.write().await.remove(&user_socket_id);
 }

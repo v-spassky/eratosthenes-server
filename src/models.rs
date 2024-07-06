@@ -21,6 +21,9 @@ impl Room {
     }
 
     pub fn start_playing(&mut self) {
+        println!("------------------");
+        println!("GAME STARTED");
+        println!("------------------");
         let new_game = self.rounds_left == ROUNDS_PER_GAME;
         self.status = RoomStatus::Playing {
             current_location: get_random_position(),
@@ -34,6 +37,7 @@ impl Room {
     }
 
     pub fn finish_game(&mut self) -> bool {
+        println!("[finish_game @ start]");
         let prev_position = match &self.status {
             RoomStatus::Playing { current_location } => *current_location,
             _ => {
@@ -45,20 +49,44 @@ impl Room {
             previous_location: Some(prev_position),
         };
         for user in self.users.iter_mut() {
+            println!("[finish_game.users.{} @ start]", &user.name);
             if let Some(guess) = user.last_guess {
+                println!("[finish_game]: user {} has guess: {:?}", &user.name, guess);
                 let last_round_score = get_guess_score(guess, prev_position);
+                println!(
+                    "[finish_game]: user {} got score: {:?}",
+                    &user.name, last_round_score
+                );
                 user.last_round_score = Some(last_round_score);
+                println!(
+                    "[finish_game]: user {} old score: {:?}",
+                    &user.name, user.score
+                );
                 user.score += last_round_score;
+                println!(
+                    "[finish_game]: user {} new score: {:?}",
+                    &user.name, user.score
+                );
             } else {
+                println!("[finish_game]: user {} has no guess", &user.name);
+                println!(
+                    "[finish_game]: user {} old score: {:?}",
+                    &user.name, user.score
+                );
                 user.last_round_score = None;
             }
             user.submitted_guess = false;
+            println!("[finish_game.users.{} @ end]", &user.name);
         }
         self.rounds_left = self.rounds_left.saturating_sub(1);
         let game_finished = self.rounds_left == 0;
         if game_finished {
             self.rounds_left = ROUNDS_PER_GAME;
         }
+        println!("[finish_game @ end]");
+        println!("------------------");
+        println!("GAME FINISHED");
+        println!("------------------");
         game_finished
     }
 
@@ -173,13 +201,16 @@ impl User {
     }
 
     pub fn submit_guess(&mut self, guess: LatLng, room_status: RoomStatus) {
+        println!("[{}.submit_guess @ start]", &self.name);
         self.last_guess = Some(guess);
-        if let RoomStatus::Playing {
-            current_location: _,
-        } = room_status
-        {
+        if let RoomStatus::Playing { .. } = room_status {
+            println!(
+                "[{}.submit_guess]: set self.submitted_guess to true",
+                &self.name
+            );
             self.submitted_guess = true;
         }
+        println!("[{}.submit_guess @ end]", &self.name);
     }
 
     pub fn revoke_guess(&mut self) {
@@ -248,15 +279,21 @@ impl LatLng {
 
 #[derive(Clone, Debug)]
 pub struct ChatMessage {
-    pub author_name: String,
+    pub is_from_bot: bool,
+    /// `None` if `is_from_bot` is `true`.
+    pub author_name: Option<String>,
     pub content: String,
 }
 
 impl ChatMessage {
     pub fn as_json(&self) -> String {
+        let author_name = match self.author_name {
+            Some(ref name) => name.clone(),
+            None => "null".to_string(),
+        };
         format!(
-            "{{\"from\": \"{}\", \"content\": \"{}\"}}",
-            self.author_name, self.content,
+            "{{\"from\": \"{}\", \"content\": \"{}\", \"isFromBot\": {}}}",
+            author_name, self.content, self.is_from_bot,
         )
     }
 }
