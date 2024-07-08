@@ -1,4 +1,4 @@
-use crate::models::ChatMessage;
+use crate::rooms::models::ChatMessage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

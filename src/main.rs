@@ -1,30 +1,26 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
-use warp::{hyper::Method, Filter};
+use crate::app_context::AppContext;
+use crate::auth::handlers::AuthHttpHandler;
+use crate::health::handlers::HealthHttpHandler;
+use crate::query_params::{UserIdQueryParam, UsernameQueryParam};
+use crate::rooms::handlers::http::{CreateRoomHttpHandler, RoomHttpHandler};
+use crate::rooms::handlers::ws::RoomWsHandler;
+use crate::users::handlers::UsersHttpHandler;
+use warp::{hyper::Method, ws::Ws, Filter};
 
-mod handlers;
+mod app_context;
+mod auth;
+mod health;
 mod map_locations;
-mod message_types;
-mod models;
+mod query_params;
+mod rooms;
 mod storage;
-mod user_descriptions;
-mod user_id;
-
-#[derive(Serialize, Deserialize)]
-struct UserIdQueryParam {
-    user_id: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct UsernameQueryParam {
-    username: String,
-}
+mod users;
 
 #[tokio::main]
 async fn main() {
-    let clients_sockets = storage::ClientSockets::default();
-    let rooms = storage::Rooms::default();
+    let app_context = AppContext::default();
 
     let cors = warp::cors()
         .allow_origin("http://127.0.0.1:3000")
@@ -42,103 +38,110 @@ async fn main() {
         .allow_methods(&[Method::POST, Method::GET, Method::OPTIONS])
         .build();
 
-    let chat = warp::path("chat")
+    let rooms = warp::path("rooms")
         .and(warp::ws())
         .and(warp::path::param::<String>())
         .and(warp::query::<UserIdQueryParam>())
         .map({
-            let clients_sockets = clients_sockets.clone();
-            let rooms = rooms.clone();
-            move |ws: warp::ws::Ws, room_id, UserIdQueryParam { user_id }: UserIdQueryParam| {
-                let clients_sockets = clients_sockets.clone();
-                let rooms = rooms.clone();
-                ws.on_upgrade(|socket| {
-                    handlers::user_connected(socket, clients_sockets, room_id, rooms, user_id)
+            let app_context = app_context.clone();
+            move |ws: Ws, room_id, UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let app_context = app_context.clone();
+                ws.on_upgrade(|socket| async {
+                    RoomWsHandler::new(app_context, socket, room_id, user_id)
+                        .await
+                        .on_user_connected()
+                        .await
                 })
             }
         })
         .with(cors.clone());
 
-    let can_connect = warp::path("can-connect")
+    let can_connect_to_room = warp::path("rooms")
         .and(warp::path::param::<String>())
+        .and(warp::path("can-connect"))
         .and(warp::query::<UserIdQueryParam>())
         .and(warp::query::<UsernameQueryParam>())
         .and_then({
-            let rooms = rooms.clone();
+            let app_context = app_context.clone();
             move |room_id: String,
                   UserIdQueryParam { user_id }: UserIdQueryParam,
                   UsernameQueryParam { username }: UsernameQueryParam| {
-                let rooms = rooms.clone();
+                let app_context = app_context.clone();
                 async move {
-                    handlers::check_if_user_can_connect(rooms, room_id, user_id, username).await
+                    RoomHttpHandler::new(app_context, room_id, user_id)
+                        .can_connect(username)
+                        .await
                 }
             }
         })
         .with(cors.clone());
 
-    let is_host = warp::path("is-host")
+    let users_of_room = warp::path("rooms")
         .and(warp::path::param::<String>())
+        .and(warp::path("users"))
         .and(warp::query::<UserIdQueryParam>())
         .and_then({
-            let rooms = rooms.clone();
+            let app_context = app_context.clone();
             move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
-                let rooms = rooms.clone();
-                async move { handlers::check_if_user_is_host(rooms, room_id, user_id).await }
+                let app_context = app_context.clone();
+                async move {
+                    RoomHttpHandler::new(app_context, room_id, user_id)
+                        .users()
+                        .await
+                }
             }
         })
         .with(cors.clone());
 
-    let create_room = warp::post()
-        .and(warp::path("create-room"))
+    let messages_of_room = warp::path("rooms")
+        .and(warp::path::param::<String>())
+        .and(warp::path("messages"))
         .and(warp::query::<UserIdQueryParam>())
         .and_then({
-            let rooms = rooms.clone();
-            move |UserIdQueryParam { user_id }: UserIdQueryParam| {
-                let rooms = rooms.clone();
-                async move { handlers::create_room(rooms, user_id).await }
+            let app_context = app_context.clone();
+            move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let app_context = app_context.clone();
+                async move {
+                    RoomHttpHandler::new(app_context, room_id, user_id)
+                        .messages()
+                        .await
+                }
             }
         })
         .with(cors.clone());
 
-    let users_of_room = warp::path("users-of-room")
+    let is_host = warp::path("rooms")
         .and(warp::path::param::<String>())
+        .and(warp::path("am-i-host"))
         .and(warp::query::<UserIdQueryParam>())
         .and_then({
-            let rooms = rooms.clone();
+            let app_context = app_context.clone();
             move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
-                let rooms = rooms.clone();
-                async move { handlers::get_users_of_room(rooms, room_id, user_id).await }
-            }
-        })
-        .with(cors.clone());
-
-    let messages_of_room = warp::path("messages-of-room")
-        .and(warp::path::param::<String>())
-        .and(warp::query::<UserIdQueryParam>())
-        .and_then({
-            let rooms = rooms.clone();
-            move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
-                let rooms = rooms.clone();
-                async move { handlers::get_messages_of_room(rooms, room_id, user_id).await }
+                let app_context = app_context.clone();
+                async move {
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .is_host()
+                        .await
+                }
             }
         })
         .with(cors.clone());
 
     let submit_guess = warp::post()
-        .and(warp::path("submit-guess"))
+        .and(warp::path("rooms"))
         .and(warp::path::param::<String>())
+        .and(warp::path("submit-guess"))
         .and(warp::query::<UserIdQueryParam>())
         .and(warp::body::json())
         .and_then({
-            let rooms = rooms.clone();
-            let clients_sockets = clients_sockets.clone();
+            let app_context = app_context.clone();
             move |room_id: String,
                   UserIdQueryParam { user_id }: UserIdQueryParam,
                   guess_json: HashMap<String, String>| {
-                let rooms = rooms.clone();
-                let clients_sockets = clients_sockets.clone();
+                let app_context = app_context.clone();
                 async move {
-                    handlers::submit_guess(rooms, room_id, user_id, guess_json, clients_sockets)
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .submit_guess(guess_json)
                         .await
                 }
             }
@@ -146,59 +149,67 @@ async fn main() {
         .with(cors.clone());
 
     let revoke_guess = warp::post()
-        .and(warp::path("revoke-guess"))
+        .and(warp::path("rooms"))
         .and(warp::path::param::<String>())
+        .and(warp::path("revoke-guess"))
         .and(warp::query::<UserIdQueryParam>())
         .and_then({
-            let rooms = rooms.clone();
-            let clients_sockets = clients_sockets.clone();
+            let app_context = app_context.clone();
             move |room_id: String, UserIdQueryParam { user_id }: UserIdQueryParam| {
-                let rooms = rooms.clone();
-                let clients_sockets = clients_sockets.clone();
-                async move { handlers::revoke_guess(rooms, room_id, user_id, clients_sockets).await }
+                let app_context = app_context.clone();
+                async move {
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .revoke_guess()
+                        .await
+                }
             }
         })
         .with(cors.clone());
 
-    let acquire_id = warp::path("acquire-id")
-        .and_then(move || async move { handlers::acquire_id().await })
+    // TODO: this should be `POST` (?)
+    let acquire_id = warp::path("auth")
+        .and(warp::path("acquire-id"))
+        .and_then(move || async move { AuthHttpHandler::new().acquire_id().await })
         .with(cors.clone());
 
     let mute_user = warp::post()
-        .and(warp::path("mute-user"))
+        .and(warp::path("rooms"))
         .and(warp::path::param::<String>())
+        .and(warp::path("users"))
+        .and(warp::path::param::<String>())
+        .and(warp::path("mute"))
         .and(warp::query::<UserIdQueryParam>())
-        .and(warp::body::json())
         .and_then({
-            let rooms = rooms.clone();
-            let clients_sockets = clients_sockets.clone();
+            let app_context = app_context.clone();
             move |room_id: String,
-                  UserIdQueryParam { user_id }: UserIdQueryParam,
-                  guess_json: HashMap<String, String>| {
-                let rooms = rooms.clone();
-                let clients_sockets = clients_sockets.clone();
+                  target_username: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let app_context = app_context.clone();
                 async move {
-                    handlers::mute_user(rooms, room_id, user_id, guess_json, clients_sockets).await
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .mute(target_username)
+                        .await
                 }
             }
         })
         .with(cors.clone());
 
     let unmute_user = warp::post()
-        .and(warp::path("unmute-user"))
+        .and(warp::path("rooms"))
         .and(warp::path::param::<String>())
+        .and(warp::path("users"))
+        .and(warp::path::param::<String>())
+        .and(warp::path("unmute"))
         .and(warp::query::<UserIdQueryParam>())
-        .and(warp::body::json())
         .and_then({
-            let rooms = rooms.clone();
-            let clients_sockets = clients_sockets.clone();
+            let app_context = app_context.clone();
             move |room_id: String,
-                  UserIdQueryParam { user_id }: UserIdQueryParam,
-                  guess_json: HashMap<String, String>| {
-                let rooms = rooms.clone();
-                let clients_sockets = clients_sockets.clone();
+                  target_username: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let app_context = app_context.clone();
                 async move {
-                    handlers::unmute_user(rooms, room_id, user_id, guess_json, clients_sockets)
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .unmute(target_username)
                         .await
                 }
             }
@@ -206,60 +217,71 @@ async fn main() {
         .with(cors.clone());
 
     let ban_user = warp::post()
-        .and(warp::path("ban-user"))
+        .and(warp::path("rooms"))
         .and(warp::path::param::<String>())
+        .and(warp::path("users"))
+        .and(warp::path::param::<String>())
+        .and(warp::path("user"))
         .and(warp::query::<UserIdQueryParam>())
-        .and(warp::body::json())
         .and_then({
-            let rooms = rooms.clone();
-            let clients_sockets = clients_sockets.clone();
+            let app_context = app_context.clone();
             move |room_id: String,
-                  UserIdQueryParam { user_id }: UserIdQueryParam,
-                  guess_json: HashMap<String, String>| {
-                let rooms = rooms.clone();
-                let clients_sockets = clients_sockets.clone();
+                  target_username: String,
+                  UserIdQueryParam { user_id }: UserIdQueryParam| {
+                let app_context = app_context.clone();
                 async move {
-                    handlers::ban_user(rooms, room_id, user_id, guess_json, clients_sockets).await
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .ban(target_username)
+                        .await
                 }
             }
         })
         .with(cors.clone());
 
     let change_user_score = warp::post()
-        .and(warp::path("change-user-score"))
+        .and(warp::path("rooms"))
         .and(warp::path::param::<String>())
+        .and(warp::path("users"))
+        .and(warp::path::param::<String>())
+        .and(warp::path("change-score"))
         .and(warp::query::<UserIdQueryParam>())
         .and(warp::body::json())
         .and_then({
-            let rooms = rooms.clone();
-            let clients_sockets = clients_sockets.clone();
+            let app_context = app_context.clone();
             move |room_id: String,
+                  target_username: String,
                   UserIdQueryParam { user_id }: UserIdQueryParam,
-                  guess_json: HashMap<String, String>| {
-                let rooms = rooms.clone();
-                let clients_sockets = clients_sockets.clone();
+                  request_body: HashMap<String, String>| {
+                let app_context = app_context.clone();
                 async move {
-                    handlers::change_user_score(
-                        rooms,
-                        room_id,
-                        user_id,
-                        guess_json,
-                        clients_sockets,
-                    )
-                    .await
+                    UsersHttpHandler::new(app_context, room_id, user_id)
+                        .change_score(target_username, request_body)
+                        .await
                 }
             }
         })
         .with(cors.clone());
 
-    let healthcheck = warp::path("healthcheck")
-        .and_then(move || async move { handlers::healthcheck().await })
+    let create_room = warp::post()
+        .and(warp::path("rooms"))
+        .and(warp::query::<UserIdQueryParam>())
+        .and_then({
+            let app_context = app_context.clone();
+            move |_query_params: UserIdQueryParam| {
+                let app_context = app_context.clone();
+                async move { CreateRoomHttpHandler::new(app_context).create().await }
+            }
+        })
         .with(cors.clone());
 
-    let routes = chat
-        .or(can_connect)
+    let healthcheck = warp::path("health")
+        .and(warp::path("check"))
+        .and_then(move || async move { HealthHttpHandler::new().healthcheck().await })
+        .with(cors.clone());
+
+    let routes = rooms
+        .or(can_connect_to_room)
         .or(is_host)
-        .or(create_room)
         .or(users_of_room)
         .or(messages_of_room)
         .or(submit_guess)
@@ -269,6 +291,7 @@ async fn main() {
         .or(unmute_user)
         .or(ban_user)
         .or(change_user_score)
+        .or(create_room)
         .or(healthcheck)
         .with(cors);
 

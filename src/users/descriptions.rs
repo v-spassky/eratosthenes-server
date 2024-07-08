@@ -1,5 +1,18 @@
 use rand::Rng;
 
+pub fn random_except_these(exclusion_list: Vec<usize>) -> (usize, String) {
+    let mut rng = rand::thread_rng();
+    if exclusion_list.len() >= USER_DESCRIPTIONS.len() {
+        let index = rng.gen_range(0..USER_DESCRIPTIONS.len());
+        return (index, USER_DESCRIPTIONS[index].to_string());
+    }
+    let allowed_indices: Vec<usize> = (0..USER_DESCRIPTIONS.len())
+        .filter(|index| !exclusion_list.contains(index))
+        .collect();
+    let index = allowed_indices[rng.gen_range(0..allowed_indices.len())];
+    (index, USER_DESCRIPTIONS[index].to_string())
+}
+
 static USER_DESCRIPTIONS: [&str; 44] = [
     "Его фасеточные глаза смотрят мне прямо в душу.",
     "Его код - это произведение искусства, а комментарии - поэзия.",
@@ -46,16 +59,3 @@ static USER_DESCRIPTIONS: [&str; 44] = [
     "Он мастер маскировки, мгновенно растворяющийся в толпе.",
     "Он мастер убеждения, легко склоняет. людей на свою сторону.",
 ];
-
-pub fn get_random_user_description(exclusion_list: Vec<usize>) -> (usize, String) {
-    let mut rng = rand::thread_rng();
-    if exclusion_list.len() >= USER_DESCRIPTIONS.len() {
-        let index = rng.gen_range(0..USER_DESCRIPTIONS.len());
-        return (index, USER_DESCRIPTIONS[index].to_string());
-    }
-    let allowed_indices: Vec<usize> = (0..USER_DESCRIPTIONS.len())
-        .filter(|index| !exclusion_list.contains(index))
-        .collect();
-    let index = allowed_indices[rng.gen_range(0..allowed_indices.len())];
-    (index, USER_DESCRIPTIONS[index].to_string())
-}

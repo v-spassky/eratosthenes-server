@@ -1,0 +1,1 @@
+pub const HOW_MUCH_LAST_MESSAGES_TO_STORE: usize = 50;
