@@ -3,17 +3,21 @@ use crate::map_locations::models::LatLng;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{SocketMessage, SocketMessageType};
 use crate::rooms::models::ChatMessage;
+use crate::storage::interface::IRoomStorage;
 use std::collections::HashMap;
 use std::convert::Infallible;
 
-pub struct UsersHttpHandler {
-    app_context: AppContext,
+pub struct UsersHttpHandler<RS: IRoomStorage> {
+    app_context: AppContext<RS>,
     room_id: String,
     user_id: String,
 }
 
-impl UsersHttpHandler {
-    pub fn new(app_context: AppContext, room_id: String, user_id: String) -> Self {
+impl<RS> UsersHttpHandler<RS>
+where
+    RS: IRoomStorage,
+{
+    pub fn new(app_context: AppContext<RS>, room_id: String, user_id: String) -> Self {
         Self {
             app_context,
             room_id,
@@ -22,14 +26,14 @@ impl UsersHttpHandler {
     }
 
     pub async fn is_host(&self) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>("{\"isHost\": false}".to_string());
         }
         Ok::<_, Infallible>(format!(
             "{{\"isHost\": {}}}",
             self.app_context
                 .rooms
-                .user_is_host_of_the_room(&self.room_id, &self.user_id)
+                .user_is_host(&self.room_id, &self.user_id)
                 .await
         ))
     }
@@ -38,7 +42,7 @@ impl UsersHttpHandler {
         &self,
         guess_json: HashMap<String, String>,
     ) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>(
                 "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
             );
@@ -50,7 +54,7 @@ impl UsersHttpHandler {
         let round_finished = self
             .app_context
             .rooms
-            .submit_user_guess(&self.room_id, &self.user_id, guess)
+            .submit_guess(&self.room_id, &self.user_id, guess)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
         let msg = SocketMessage {
@@ -72,7 +76,7 @@ impl UsersHttpHandler {
             let rounds_left = self
                 .app_context
                 .rooms
-                .get_current_round_number(&self.room_id)
+                .current_round_number(&self.room_id)
                 .await;
             let round_number = match rounds_left {
                 ROUNDS_PER_GAME => ROUNDS_PER_GAME,
@@ -91,7 +95,7 @@ impl UsersHttpHandler {
             };
             self.app_context
                 .rooms
-                .add_new_message(&self.room_id, bot_message)
+                .add_message(&self.room_id, bot_message)
                 .await;
             self.app_context
                 .sockets
@@ -106,14 +110,14 @@ impl UsersHttpHandler {
     }
 
     pub async fn revoke_guess(&self) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>(
                 "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
             );
         }
         self.app_context
             .rooms
-            .revoke_user_guess(&self.room_id, &self.user_id)
+            .revoke_guess(&self.room_id, &self.user_id)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
         let msg = SocketMessage {
@@ -129,7 +133,7 @@ impl UsersHttpHandler {
     }
 
     pub async fn mute(&self, target_username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>(
                 "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
             );
@@ -137,7 +141,7 @@ impl UsersHttpHandler {
         if !self
             .app_context
             .rooms
-            .user_is_host_of_the_room(&self.room_id, &self.user_id)
+            .user_is_host(&self.room_id, &self.user_id)
             .await
         {
             return Ok::<_, Infallible>(
@@ -146,7 +150,7 @@ impl UsersHttpHandler {
         }
         self.app_context
             .rooms
-            .mute_user(&self.room_id, &target_username)
+            .mute(&self.room_id, &target_username)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
         let msg = "{\"type\": \"userMuted\", \"payload\": null}".to_string();
@@ -158,7 +162,7 @@ impl UsersHttpHandler {
     }
 
     pub async fn unmute(&self, target_username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>(
                 "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
             );
@@ -166,7 +170,7 @@ impl UsersHttpHandler {
         if !self
             .app_context
             .rooms
-            .user_is_host_of_the_room(&self.room_id, &self.user_id)
+            .user_is_host(&self.room_id, &self.user_id)
             .await
         {
             return Ok::<_, Infallible>(
@@ -175,7 +179,7 @@ impl UsersHttpHandler {
         }
         self.app_context
             .rooms
-            .unmute_user(&self.room_id, &target_username)
+            .unmute(&self.room_id, &target_username)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
         let msg = "{\"type\": \"userUnmuted\", \"payload\": null}".to_string();
@@ -187,7 +191,7 @@ impl UsersHttpHandler {
     }
 
     pub async fn ban(&self, target_username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>(
                 "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
             );
@@ -195,7 +199,7 @@ impl UsersHttpHandler {
         if !self
             .app_context
             .rooms
-            .user_is_host_of_the_room(&self.room_id, &self.user_id)
+            .user_is_host(&self.room_id, &self.user_id)
             .await
         {
             return Ok::<_, Infallible>(
@@ -205,7 +209,7 @@ impl UsersHttpHandler {
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
         self.app_context
             .rooms
-            .ban_user(&self.room_id, &target_username)
+            .ban(&self.room_id, &target_username)
             .await;
         let msg = format!(
             "{{\"type\": \"userBanned\", \"payload\": {{\"username\": \"{}\"}}}}",
@@ -223,7 +227,7 @@ impl UsersHttpHandler {
         target_username: String,
         request_body: HashMap<String, String>,
     ) -> Result<String, Infallible> {
-        if !self.app_context.rooms.such_room_exists(&self.room_id).await {
+        if !self.app_context.rooms.exists(&self.room_id).await {
             return Ok::<_, Infallible>(
                 "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
             );
@@ -231,7 +235,7 @@ impl UsersHttpHandler {
         if !self
             .app_context
             .rooms
-            .user_is_host_of_the_room(&self.room_id, &self.user_id)
+            .user_is_host(&self.room_id, &self.user_id)
             .await
         {
             return Ok::<_, Infallible>(
@@ -242,7 +246,7 @@ impl UsersHttpHandler {
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
         self.app_context
             .rooms
-            .change_user_score(&self.room_id, &target_username, amount)
+            .change_score(&self.room_id, &target_username, amount)
             .await;
         let msg = "{\"type\": \"userScoreChanged\", \"payload\": null}".to_string();
         self.app_context

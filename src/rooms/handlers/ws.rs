@@ -3,6 +3,7 @@ use crate::rooms::consts::MAX_MESSAGE_LENGTH;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{SocketMessage, SocketMessagePayload, SocketMessageType};
 use crate::rooms::models::ChatMessage;
+use crate::storage::interface::IRoomStorage;
 use crate::storage::rooms::UserConnectedResult;
 use futures_util::{
     stream::{SplitSink, SplitStream},
@@ -13,8 +14,8 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use unicode_segmentation::UnicodeSegmentation;
 use warp::ws::{Message, WebSocket};
 
-pub struct RoomWsHandler {
-    app_context: AppContext,
+pub struct RoomWsHandler<RS: IRoomStorage> {
+    app_context: AppContext<RS>,
     room_id: String,
     user_id: String,
     socket_id: usize,
@@ -23,9 +24,12 @@ pub struct RoomWsHandler {
     rx: Option<UnboundedReceiverStream<Message>>,
 }
 
-impl RoomWsHandler {
+impl<RS> RoomWsHandler<RS>
+where
+    RS: IRoomStorage,
+{
     pub async fn new(
-        app_context: AppContext,
+        app_context: AppContext<RS>,
         websocket: WebSocket,
         room_id: String,
         user_id: String,
@@ -90,7 +94,7 @@ impl RoomWsHandler {
         let relevant_socket_ids = self
             .app_context
             .rooms
-            .relevant_socket_ids(&self.room_id, self.socket_id)
+            .socket_ids_except_sender(&self.room_id, self.socket_id)
             .await;
         let socket_message = socket_message.unwrap();
         match socket_message.r#type {
@@ -98,7 +102,7 @@ impl RoomWsHandler {
                 if self
                     .app_context
                     .rooms
-                    .user_is_muted(&self.room_id, &self.user_id)
+                    .is_muted(&self.room_id, &self.user_id)
                     .await
                 {
                     return;
@@ -124,7 +128,7 @@ impl RoomWsHandler {
                 }
                 self.app_context
                     .rooms
-                    .add_new_message(&self.room_id, payload.to_model())
+                    .add_message(&self.room_id, payload.to_model())
                     .await;
             }
             SocketMessageType::UserConnected => {
@@ -133,7 +137,7 @@ impl RoomWsHandler {
                         if !self
                             .app_context
                             .rooms
-                            .room_has_user_with_such_id(&self.room_id, &self.user_id)
+                            .has_user_with_such_id(&self.room_id, &self.user_id)
                             .await
                         {
                             let content = format!("К нам присоединился {}!", payload.username);
@@ -151,7 +155,7 @@ impl RoomWsHandler {
                             };
                             self.app_context
                                 .rooms
-                                .add_new_message(&self.room_id, bot_message)
+                                .add_message(&self.room_id, bot_message)
                                 .await;
                             self.app_context
                                 .sockets
@@ -171,12 +175,7 @@ impl RoomWsHandler {
                 match self
                     .app_context
                     .rooms
-                    .handle_new_user_connected(
-                        &self.room_id,
-                        payload,
-                        self.socket_id,
-                        &self.user_id,
-                    )
+                    .on_user_connected(&self.room_id, payload, self.socket_id, &self.user_id)
                     .await
                 {
                     Ok(UserConnectedResult::NewUser) => {}
@@ -201,7 +200,7 @@ impl RoomWsHandler {
                 };
                 self.app_context
                     .rooms
-                    .handle_user_reconnected(&self.room_id, payload, self.socket_id, &self.user_id)
+                    .on_user_reconnected(&self.room_id, payload, self.socket_id, &self.user_id)
                     .await;
                 return;
             }
@@ -215,7 +214,7 @@ impl RoomWsHandler {
                 };
                 self.app_context
                     .rooms
-                    .handle_user_disconnected(
+                    .on_user_disconnected(
                         &self.room_id,
                         msg.to_string(),
                         &self.user_id,
@@ -230,7 +229,7 @@ impl RoomWsHandler {
                 let rounds_left = self
                     .app_context
                     .rooms
-                    .get_current_round_number(&self.room_id)
+                    .current_round_number(&self.room_id)
                     .await;
                 let round_number = match rounds_left {
                     0 => ROUNDS_PER_GAME,
@@ -251,7 +250,7 @@ impl RoomWsHandler {
                 };
                 self.app_context
                     .rooms
-                    .add_new_message(&self.room_id, bot_message)
+                    .add_message(&self.room_id, bot_message)
                     .await;
                 self.app_context
                     .sockets
@@ -259,7 +258,7 @@ impl RoomWsHandler {
                     .await;
                 self.app_context
                     .rooms
-                    .handle_game_started(&self.room_id, self.app_context.sockets.clone())
+                    .start_game(&self.room_id, self.app_context.sockets.clone())
                     .await;
             }
             SocketMessageType::RoundFinished => {

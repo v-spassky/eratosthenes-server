@@ -7,11 +7,11 @@ use warp::ws::Message;
 pub static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Clone, Default)]
-pub struct ClientSockets {
+pub struct HashMapClientSocketsStorage {
     storage: Arc<RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>>,
 }
 
-impl ClientSockets {
+impl HashMapClientSocketsStorage {
     pub async fn add(&self, socket: mpsc::UnboundedSender<Message>) -> usize {
         let socket_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
         self.storage.write().await.insert(socket_id, socket);

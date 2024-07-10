@@ -1,8 +1,8 @@
-use crate::storage::rooms::Rooms;
-use crate::storage::sockets::ClientSockets;
+use crate::storage::interface::IRoomStorage;
+use crate::storage::sockets::HashMapClientSocketsStorage;
 
 #[derive(Clone, Default)]
-pub struct AppContext {
-    pub rooms: Rooms,
-    pub sockets: ClientSockets,
+pub struct AppContext<RS: IRoomStorage> {
+    pub rooms: RS,
+    pub sockets: HashMapClientSocketsStorage,
 }

@@ -6,6 +6,7 @@ use crate::health::handlers::HealthHttpHandler;
 use crate::query_params::{UserIdQueryParam, UsernameQueryParam};
 use crate::rooms::handlers::http::{CreateRoomHttpHandler, RoomHttpHandler};
 use crate::rooms::handlers::ws::RoomWsHandler;
+use crate::storage::rooms::HashMapRoomsStorage;
 use crate::users::handlers::UsersHttpHandler;
 use warp::{hyper::Method, ws::Ws, Filter};
 
@@ -20,7 +21,7 @@ mod users;
 
 #[tokio::main]
 async fn main() {
-    let app_context = AppContext::default();
+    let app_context = AppContext::<HashMapRoomsStorage>::default();
 
     let cors = warp::cors()
         .allow_origin("http://127.0.0.1:3000")
