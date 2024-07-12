@@ -7,7 +7,7 @@ https://cloud.google.com/artifact-registry/docs/docker/authentication
 Build, tag and push the docker image to the Google Cloud Registry:
 
 ```bash
-docker build -t eratosthenes-server .
+docker build -t eratosthenes-server . && docker image prune --filter label=stage=builder
 ```
 
 ```bash
