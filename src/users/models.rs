@@ -1,16 +1,22 @@
 use crate::map_locations::models::LatLng;
 use crate::rooms::models::RoomStatus;
 use crate::users::descriptions;
+use serde::Serialize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct User {
-    pub id: String,
+    pub public_id: String,
+    #[serde(skip_serializing)]
+    pub private_id: String,
     pub name: String,
     pub avatar_emoji: String,
     pub score: u64,
     pub is_host: bool,
     pub description: String,
+    #[serde(skip_serializing)]
     pub description_id: usize,
+    #[serde(skip_serializing)]
     pub socket_id: Option<usize>,
     pub last_guess: Option<LatLng>,
     pub submitted_guess: bool,
@@ -20,7 +26,8 @@ pub struct User {
 
 impl User {
     pub fn new(
-        id: String,
+        public_id: String,
+        private_id: String,
         name: String,
         avatar_emoji: String,
         room_has_no_members: bool,
@@ -29,7 +36,8 @@ impl User {
     ) -> Self {
         let (description_id, description) = descriptions::random_except_these(desc_exclusion_list);
         User {
-            id,
+            private_id,
+            public_id,
             name,
             avatar_emoji,
             score: 0,
@@ -68,37 +76,6 @@ impl User {
             self.score += amount as u64;
         } else {
             self.score = self.score.saturating_sub(-amount as u64);
-        }
-    }
-
-    pub fn as_json(&self) -> String {
-        format!(
-            "{{\"name\": \"{}\", \"avatarEmoji\": \"{}\", \"isHost\": {}, \"score\": {},
-            \"description\": \"{}\", \"lastGuess\": {}, \"lastRoundScore\": {},
-            \"submittedGuess\": {}, \"isMuted\": {}}}",
-            self.name,
-            self.avatar_emoji,
-            self.is_host,
-            self.score,
-            self.description,
-            self.last_guess_as_json(),
-            self.last_round_score_as_json(),
-            self.submitted_guess,
-            self.is_muted,
-        )
-    }
-
-    fn last_guess_as_json(&self) -> String {
-        match &self.last_guess {
-            Some(guess) => guess.as_json(),
-            None => "null".to_string(),
-        }
-    }
-
-    fn last_round_score_as_json(&self) -> String {
-        match &self.last_round_score {
-            Some(score) => score.to_string(),
-            None => "null".to_string(),
         }
     }
 }

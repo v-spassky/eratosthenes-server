@@ -1,10 +1,10 @@
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 use warp::ws::Message;
 
-pub static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
+pub static NEXT_SOCKET_ID: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Clone, Default)]
 pub struct HashMapClientSocketsStorage {
@@ -13,7 +13,7 @@ pub struct HashMapClientSocketsStorage {
 
 impl HashMapClientSocketsStorage {
     pub async fn add(&self, socket: mpsc::UnboundedSender<Message>) -> usize {
-        let socket_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
+        let socket_id = NEXT_SOCKET_ID.fetch_add(1, Ordering::Relaxed);
         self.storage.write().await.insert(socket_id, socket);
         socket_id
     }
@@ -38,6 +38,7 @@ impl HashMapClientSocketsStorage {
         }
     }
 
+    // TODO: refactor so that `msg` is a struct or enum, not `&str`
     pub async fn broadcast_msg(&self, msg: &str, sockets_ids: &[Option<usize>]) {
         for (&uid, tx) in self.storage.read().await.iter() {
             if sockets_ids.contains(&Some(uid)) {

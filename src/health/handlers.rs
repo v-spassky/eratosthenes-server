@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use crate::health::responses::HealthCheckResponse;
 
 pub struct HealthHttpHandler {}
 
@@ -7,7 +7,7 @@ impl HealthHttpHandler {
         Self {}
     }
 
-    pub async fn healthcheck(&self) -> Result<String, Infallible> {
-        Ok::<_, Infallible>(String::new())
+    pub async fn healthcheck(&self) -> HealthCheckResponse {
+        HealthCheckResponse { error: false }
     }
 }

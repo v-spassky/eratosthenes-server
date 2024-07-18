@@ -1,62 +1,59 @@
-use crate::app_context::AppContext;
+use crate::app_context::{AppContext, RequestContext};
 use crate::map_locations::models::LatLng;
+use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::ROUNDS_PER_GAME;
-use crate::rooms::message_types::{SocketMessage, SocketMessageType};
+use crate::rooms::message_types::{
+    ChatMessagePayload, SocketMessage, SocketMessagePayload, SocketMessageType, UserPubIdInfoPayload,
+};
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
-use std::collections::HashMap;
-use std::convert::Infallible;
+use crate::users::responses::{
+    BanUserResponse, ChangeScoreResponse, GuessRevocationError, GuessSubmissionError,
+    IsUserTheHostResponse, MuteUserResponse, RevokeGuessResponse, ScoreChangeError,
+    SubmitGuessResponse, UnmuteUserResponse, UserBanningError, UserMutingError, UserUnmutingError,
+};
 
 pub struct UsersHttpHandler<RS: IRoomStorage> {
     app_context: AppContext<RS>,
-    room_id: String,
-    user_id: String,
+    request_context: RequestContext,
 }
 
 impl<RS> UsersHttpHandler<RS>
 where
     RS: IRoomStorage,
 {
-    pub fn new(app_context: AppContext<RS>, room_id: String, user_id: String) -> Self {
+    pub fn new(app_context: AppContext<RS>, request_context: RequestContext) -> Self {
         Self {
             app_context,
-            room_id,
-            user_id,
+            request_context,
         }
     }
 
-    pub async fn is_host(&self) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>("{\"isHost\": false}".to_string());
+    pub async fn is_host(&self) -> IsUserTheHostResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return IsUserTheHostResponse { is_host: false };
         }
-        Ok::<_, Infallible>(format!(
-            "{{\"isHost\": {}}}",
-            self.app_context
-                .rooms
-                .user_is_host(&self.room_id, &self.user_id)
-                .await
-        ))
+        let is_host = self
+            .app_context
+            .rooms
+            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
+            .await;
+        IsUserTheHostResponse { is_host }
     }
 
-    pub async fn submit_guess(
-        &self,
-        guess_json: HashMap<String, String>,
-    ) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn submit_guess(&self, guess: LatLng) -> SubmitGuessResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return SubmitGuessResponse {
+                error: true,
+                error_code: Some(GuessSubmissionError::RoomNotFound),
+            };
         }
-        let guess = LatLng {
-            lat: guess_json.get("lat").unwrap().parse().unwrap(),
-            lng: guess_json.get("lng").unwrap().parse().unwrap(),
-        };
         let round_finished = self
             .app_context
             .rooms
-            .submit_guess(&self.room_id, &self.user_id, guess)
+            .submit_guess(&self.request_context.room_id, &self.request_context.private_id, guess)
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
+        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
         let msg = SocketMessage {
             r#type: SocketMessageType::GuessSubmitted,
             payload: None,
@@ -67,59 +64,73 @@ where
             .broadcast_msg(&msg, &room_sockets_ids)
             .await;
         if round_finished {
-            let game_finished = self.app_context.rooms.finish_game(&self.room_id).await;
-            let msg = if game_finished {
-                "{\"type\":\"gameFinished\",\"payload\":null}".to_string()
-            } else {
-                "{\"type\":\"roundFinished\",\"payload\":null}".to_string()
+            let game_finished = self.app_context.rooms.finish_game(&self.request_context.room_id).await;
+            let event_msg = match game_finished {
+                true => SocketMessage {
+                    r#type: SocketMessageType::GameFinished,
+                    payload: None,
+                },
+                false => SocketMessage {
+                    r#type: SocketMessageType::RoundFinished,
+                    payload: None,
+                },
             };
+            let raw_event_msg = serde_json::to_string(&event_msg).unwrap();
             let rounds_left = self
                 .app_context
                 .rooms
-                .current_round_number(&self.room_id)
+                .current_round_number(&self.request_context.room_id)
                 .await;
             let round_number = match rounds_left {
                 ROUNDS_PER_GAME => ROUNDS_PER_GAME,
                 _ => ROUNDS_PER_GAME - rounds_left,
             };
-            let bot_msg_content = format!("Раунд {round_number}/{ROUNDS_PER_GAME} закончился.");
-            let bot_msg = format!(
-                "{{\"type\": \"chatMessage\", \"payload\": {{\"from\": null,
-                \"content\": \"{}\", \"isFromBot\": true}}}}",
-                bot_msg_content,
-            );
-            let bot_message = ChatMessage {
-                is_from_bot: true,
-                author_name: None,
-                content: bot_msg_content,
+            let bot_chat_msg = BotMessage::RoundEnded {
+                round_number,
+                rounds_per_game: ROUNDS_PER_GAME,
             };
+            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
+            let bot_ws_msg = SocketMessage {
+                r#type: SocketMessageType::ChatMessage,
+                payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+                    from: None,
+                    content: raw_bot_chat_msg.clone(),
+                    is_from_bot: true,
+                })),
+            };
+            let raw_bot_ws_msg = serde_json::to_string(&bot_ws_msg).unwrap();
+            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
             self.app_context
                 .rooms
-                .add_message(&self.room_id, bot_message)
+                .add_message(&self.request_context.room_id, bot_message)
                 .await;
             self.app_context
                 .sockets
-                .broadcast_msg(&bot_msg, &room_sockets_ids)
+                .broadcast_msg(&raw_bot_ws_msg, &room_sockets_ids)
                 .await;
             self.app_context
                 .sockets
-                .broadcast_msg(&msg, &room_sockets_ids)
+                .broadcast_msg(&raw_event_msg, &room_sockets_ids)
                 .await;
         }
-        Ok::<_, Infallible>(String::from("{\"error\": false}"))
+        SubmitGuessResponse {
+            error: false,
+            error_code: None,
+        }
     }
 
-    pub async fn revoke_guess(&self) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn revoke_guess(&self) -> RevokeGuessResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return RevokeGuessResponse {
+                error: true,
+                error_code: Some(GuessRevocationError::RoomNotFound),
+            };
         }
         self.app_context
             .rooms
-            .revoke_guess(&self.room_id, &self.user_id)
+            .revoke_guess(&self.request_context.room_id, &self.request_context.private_id)
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
+        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
         let msg = SocketMessage {
             r#type: SocketMessageType::GuessRevoked,
             payload: None,
@@ -129,130 +140,160 @@ where
             .sockets
             .broadcast_msg(&msg, &room_sockets_ids)
             .await;
-        Ok::<_, Infallible>(String::from("{\"error\": false}"))
+        RevokeGuessResponse {
+            error: false,
+            error_code: None,
+        }
     }
 
-    pub async fn mute(&self, target_username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn mute(&self, target_user_public_id: String) -> MuteUserResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return MuteUserResponse {
+                error: true,
+                error_code: Some(UserMutingError::RoomNotFound),
+            };
         }
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.room_id, &self.user_id)
+            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
             .await
         {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
-            );
+            return MuteUserResponse {
+                error: true,
+                error_code: Some(UserMutingError::YouAreNotTheHost),
+            };
         }
         self.app_context
             .rooms
-            .mute(&self.room_id, &target_username)
+            .mute(&self.request_context.room_id, &target_user_public_id)
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
-        let msg = "{\"type\": \"userMuted\", \"payload\": null}".to_string();
+        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let ws_event_msg = SocketMessage {
+            r#type: SocketMessageType::UserMuted,
+            payload: None,
+        };
+        let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
             .sockets
-            .broadcast_msg(&msg, &room_sockets_ids)
+            .broadcast_msg(&raw_ws_event_msg, &room_sockets_ids)
             .await;
-        Ok::<_, Infallible>(String::from("{\"error\": false}"))
+        MuteUserResponse {
+            error: false,
+            error_code: None,
+        }
     }
 
-    pub async fn unmute(&self, target_username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn unmute(&self, target_user_public_id: String) -> UnmuteUserResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return UnmuteUserResponse {
+                error: true,
+                error_code: Some(UserUnmutingError::RoomNotFound),
+            };
         }
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.room_id, &self.user_id)
+            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
             .await
         {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
-            );
+            return UnmuteUserResponse {
+                error: true,
+                error_code: Some(UserUnmutingError::YouAreNotTheHost),
+            };
         }
         self.app_context
             .rooms
-            .unmute(&self.room_id, &target_username)
+            .unmute(&self.request_context.room_id, &target_user_public_id)
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
-        let msg = "{\"type\": \"userUnmuted\", \"payload\": null}".to_string();
+        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let ws_event_msg = SocketMessage {
+            r#type: SocketMessageType::UserUnmuted,
+            payload: None,
+        };
+        let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
             .sockets
-            .broadcast_msg(&msg, &room_sockets_ids)
+            .broadcast_msg(&raw_ws_event_msg, &room_sockets_ids)
             .await;
-        Ok::<_, Infallible>(String::from("{\"error\": false}"))
+        UnmuteUserResponse {
+            error: false,
+            error_code: None,
+        }
     }
 
-    pub async fn ban(&self, target_username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn ban(&self, target_user_public_id: String) -> BanUserResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return BanUserResponse {
+                error: true,
+                error_code: Some(UserBanningError::RoomNotFound),
+            };
         }
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.room_id, &self.user_id)
+            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
             .await
         {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
-            );
+            return BanUserResponse {
+                error: true,
+                error_code: Some(UserBanningError::YouAreNotTheHost),
+            };
         }
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
+        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
         self.app_context
             .rooms
-            .ban(&self.room_id, &target_username)
+            .ban(&self.request_context.room_id, &target_user_public_id)
             .await;
-        let msg = format!(
-            "{{\"type\": \"userBanned\", \"payload\": {{\"username\": \"{}\"}}}}",
-            target_username,
-        );
+        let ws_event_msg = SocketMessage {
+            r#type: SocketMessageType::UserBanned,
+            payload: Some(SocketMessagePayload::Username(UserPubIdInfoPayload {
+                // TODO: update code from username to id
+                public_id: target_user_public_id,
+            })),
+        };
+        let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
             .sockets
-            .broadcast_msg(&msg, &room_sockets_ids)
+            .broadcast_msg(&raw_ws_event_msg, &room_sockets_ids)
             .await;
-        Ok::<_, Infallible>(String::from("{\"error\": false}"))
+        BanUserResponse {
+            error: false,
+            error_code: None,
+        }
     }
 
-    pub async fn change_score(
-        &self,
-        target_username: String,
-        request_body: HashMap<String, String>,
-    ) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn change_score(&self, target_user_public_id: String, amount: i64) -> ChangeScoreResponse {
+        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+            return ChangeScoreResponse {
+                error: true,
+                error_code: Some(ScoreChangeError::RoomNotFound),
+            };
         }
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.room_id, &self.user_id)
+            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
             .await
         {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"You are not the host.\"}".to_string(),
-            );
+            return ChangeScoreResponse {
+                error: true,
+                error_code: Some(ScoreChangeError::YouAreNotTheHost),
+            };
         }
-        let amount = request_body.get("amount").unwrap().parse::<i64>().unwrap();
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.room_id).await;
+        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
         self.app_context
             .rooms
-            .change_score(&self.room_id, &target_username, amount)
+            .change_score(&self.request_context.room_id, &target_user_public_id, amount)
             .await;
         let msg = "{\"type\": \"userScoreChanged\", \"payload\": null}".to_string();
         self.app_context
             .sockets
             .broadcast_msg(&msg, &room_sockets_ids)
             .await;
-        Ok::<_, Infallible>(String::from("{\"error\": false}"))
+        ChangeScoreResponse {
+            error: false,
+            error_code: None,
+        }
     }
 }

@@ -1,9 +1,10 @@
 use crate::map_locations::models::LatLng;
 use crate::rooms::message_types::BriefUserInfoPayload;
-use crate::rooms::models::ChatMessage;
+use crate::rooms::models::{ChatMessage, RoomStatus};
 
 use crate::storage::rooms::UserConnectedResult;
 use crate::storage::sockets::HashMapClientSocketsStorage;
+use crate::users::models::User;
 
 pub trait IRoomStorage:
     RoomRepo
@@ -13,7 +14,7 @@ pub trait IRoomStorage:
     + UserScoreRepo
     + UserGuessRepo
     + UserPermissionsRepo
-    + RoomInfoSerializer
+    + RoomInfoRepo
 {
 }
 
@@ -22,16 +23,16 @@ pub trait RoomRepo {
 
     async fn create(&self) -> String;
 
-    async fn has_user_with_such_username(
+    async fn has_different_user_with_same_username(
         &self,
         room_id: &str,
+        public_user_id: &str,
         username: &str,
-        user_id: &str,
     ) -> bool;
 
-    async fn has_user_with_such_id(&self, room_id: &str, user_id: &str) -> bool;
+    async fn has_user_with_such_private_id(&self, room_id: &str, private_user_id: &str) -> bool;
 
-    async fn user_is_host(&self, room_id: &str, user_id: &str) -> bool;
+    async fn user_is_host(&self, room_id: &str, public_user_id: &str) -> bool;
 
     async fn add_message(&self, room_id: &str, message: ChatMessage);
 }
@@ -50,7 +51,8 @@ pub trait RoomConnectionHandler {
         room_id: &str,
         msg_payload: BriefUserInfoPayload,
         socket_id: usize,
-        user_id: &str,
+        public_user_id: &str,
+        private_user_id: &str,
     ) -> Result<UserConnectedResult, ()>;
 
     async fn on_user_reconnected(
@@ -58,14 +60,14 @@ pub trait RoomConnectionHandler {
         room_id: &str,
         _msg_payload: BriefUserInfoPayload,
         socket_id: usize,
-        user_id: &str,
+        private_user_id: &str,
     );
 
     async fn on_user_disconnected(
         &self,
         room_id: &str,
         raw_msg: String,
-        user_id: &str,
+        private_user_id: &str,
         socket_id: usize,
         client_sockets: HashMapClientSocketsStorage,
     );
@@ -84,31 +86,31 @@ pub trait RoomSocketsRepo {
 }
 
 pub trait UserScoreRepo {
-    async fn change_score(&self, room_id: &str, username: &str, amount: i64);
+    async fn change_score(&self, room_id: &str, target_user_public_id: &str, amount: i64);
 }
 
 pub trait UserGuessRepo {
-    async fn submit_guess(&self, room_id: &str, user_id: &str, guess: LatLng) -> bool;
+    async fn submit_guess(&self, room_id: &str, private_user_id: &str, guess: LatLng) -> bool;
 
-    async fn revoke_guess(&self, room_id: &str, user_id: &str);
+    async fn revoke_guess(&self, room_id: &str, private_user_id: &str);
 }
 
 pub trait UserPermissionsRepo {
-    async fn mute(&self, room_id: &str, user_id_to_mute: &str);
+    async fn mute(&self, room_id: &str, target_user_public_id: &str);
 
-    async fn unmute(&self, room_id: &str, user_id_to_unmute: &str);
+    async fn unmute(&self, room_id: &str, target_user_public_id: &str);
 
-    async fn ban(&self, room_id: &str, user_name_to_ban: &str);
+    async fn ban(&self, room_id: &str, target_user_public_id: &str);
 
-    async fn is_muted(&self, room_id: &str, user_id: &str) -> bool;
+    async fn is_muted(&self, room_id: &str, public_user_id: &str) -> bool;
 
-    async fn is_banned(&self, room_id: &str, user_id: &str) -> bool;
+    async fn is_banned(&self, room_id: &str, public_user_id: &str) -> bool;
 }
 
-pub trait RoomInfoSerializer {
-    async fn status_as_json(&self, room_id: &str) -> String;
+pub trait RoomInfoRepo {
+    async fn status(&self, room_id: &str) -> RoomStatus;
 
-    async fn users_as_json(&self, room_id: &str) -> String;
+    async fn users(&self, room_id: &str) -> Vec<User>;
 
-    async fn messages_as_json(&self, room_id: &str) -> String;
+    async fn messages(&self, room_id: &str) -> Vec<ChatMessage>;
 }

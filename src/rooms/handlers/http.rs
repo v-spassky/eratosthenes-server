@@ -1,53 +1,68 @@
-use crate::app_context::AppContext;
+use crate::app_context::{AppContext, RequestContext};
 use crate::rooms::consts::MAX_USERNAME_LENGTH;
+use crate::rooms::handlers::responses::{
+    CanConnectToRoomResponse, ConnectionRefusalError, CreateRoomResponse, RoomMessagesResponse,
+    RoomMessagesResponseError, RoomUsersResponse, RoomUsersResponseError,
+};
 use crate::storage::interface::IRoomStorage;
-use std::convert::Infallible;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct RoomHttpHandler<RS: IRoomStorage> {
     app_context: AppContext<RS>,
-    room_id: String,
-    user_id: String,
+    request_context: RequestContext,
 }
 
 impl<RS> RoomHttpHandler<RS>
 where
     RS: IRoomStorage,
 {
-    pub fn new(app_context: AppContext<RS>, room_id: String, user_id: String) -> Self {
+    pub fn new(app_context: AppContext<RS>, request_context: RequestContext) -> Self {
         Self {
             app_context,
-            room_id,
-            user_id,
+            request_context,
         }
     }
 
-    pub async fn can_connect(&self, username: String) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"canConnect\": false, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn can_connect(&self, username: String) -> CanConnectToRoomResponse {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
+            return CanConnectToRoomResponse {
+                can_connect: false,
+                error_code: Some(ConnectionRefusalError::RoomNotFound),
+            };
         }
         if self
             .app_context
             .rooms
-            .has_user_with_such_username(&self.room_id, &username, &self.user_id)
+            .has_different_user_with_same_username(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+                &username,
+            )
             .await
         {
-            return Ok::<_, Infallible>(
-                "{\"canConnect\": false, \"reason\": \"Such user already in the room.\"}"
-                    .to_string(),
-            );
+            return CanConnectToRoomResponse {
+                can_connect: false,
+                error_code: Some(ConnectionRefusalError::UserAlreadyInRoom),
+            };
         }
         if self
             .app_context
             .rooms
-            .is_banned(&self.room_id, &self.user_id)
+            .is_banned(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+            )
             .await
         {
-            return Ok::<_, Infallible>(
-                "{\"canConnect\": false, \"reason\": \"User is banned.\"}".to_string(),
-            );
+            return CanConnectToRoomResponse {
+                can_connect: false,
+                error_code: Some(ConnectionRefusalError::UserBanned),
+            };
         }
         if username.graphemes(true).count() > MAX_USERNAME_LENGTH {
             eprintln!(
@@ -56,36 +71,72 @@ where
                 username.len(),
                 MAX_USERNAME_LENGTH,
             );
-            return Ok::<_, Infallible>(
-                "{\"canConnect\": false, \"reason\": \"The username is too long.\"}".to_string(),
-            );
+            return CanConnectToRoomResponse {
+                can_connect: false,
+                error_code: Some(ConnectionRefusalError::UsernameTooLong),
+            };
         }
-        Ok::<_, Infallible>("{\"canConnect\": true}".to_string())
+        CanConnectToRoomResponse {
+            can_connect: true,
+            error_code: None,
+        }
     }
 
-    pub async fn users(&self) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn users(&self) -> RoomUsersResponse {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
+            return RoomUsersResponse {
+                error: true,
+                error_code: Some(RoomUsersResponseError::RoomNotFound),
+                users: None,
+                status: None,
+            };
         }
-        Ok::<_, Infallible>(format!(
-            "{{\"error\": false, \"users\": {}, \"status\": {}}}",
-            self.app_context.rooms.users_as_json(&self.room_id).await,
-            self.app_context.rooms.status_as_json(&self.room_id).await,
-        ))
+        RoomUsersResponse {
+            error: false,
+            error_code: None,
+            users: Some(
+                self.app_context
+                    .rooms
+                    .users(&self.request_context.room_id)
+                    .await,
+            ),
+            status: Some(
+                self.app_context
+                    .rooms
+                    .status(&self.request_context.room_id)
+                    .await,
+            ),
+        }
     }
 
-    pub async fn messages(&self) -> Result<String, Infallible> {
-        if !self.app_context.rooms.exists(&self.room_id).await {
-            return Ok::<_, Infallible>(
-                "{\"error\": true, \"reason\": \"Room not found.\"}".to_string(),
-            );
+    pub async fn messages(&self) -> RoomMessagesResponse {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
+            return RoomMessagesResponse {
+                error: true,
+                error_code: Some(RoomMessagesResponseError::RoomNotFound),
+                messages: None,
+            };
         }
-        Ok::<_, Infallible>(format!(
-            "{{\"error\": false, \"messages\": {}}}",
-            self.app_context.rooms.messages_as_json(&self.room_id).await,
-        ))
+        RoomMessagesResponse {
+            error: false,
+            error_code: None,
+            messages: Some(
+                self.app_context
+                    .rooms
+                    .messages(&self.request_context.room_id)
+                    .await,
+            ),
+        }
     }
 }
 
@@ -101,8 +152,9 @@ where
         Self { app_context }
     }
 
-    pub async fn create(&self) -> Result<String, Infallible> {
-        let room_id = self.app_context.rooms.create().await;
-        Ok::<_, Infallible>(format!("{{\"roomId\": \"{}\"}}", room_id))
+    pub async fn create(&self) -> CreateRoomResponse {
+        CreateRoomResponse {
+            room_id: self.app_context.rooms.create().await,
+        }
     }
 }

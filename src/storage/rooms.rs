@@ -1,10 +1,14 @@
 use crate::map_locations::models::LatLng;
+use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::ROUNDS_PER_GAME;
-use crate::rooms::message_types::BriefUserInfoPayload;
+use crate::rooms::message_types::{
+    BriefUserInfoPayload, ChatMessagePayload, SocketMessage, SocketMessagePayload,
+    SocketMessageType,
+};
 use crate::rooms::models::{ChatMessage, Room, RoomStatus};
 use crate::storage::consts::HOW_MUCH_LAST_MESSAGES_TO_STORE;
 use crate::storage::interface::{
-    IRoomStorage, RoomConnectionHandler, RoomGameFlowHandler, RoomInfoSerializer, RoomRepo,
+    IRoomStorage, RoomConnectionHandler, RoomGameFlowHandler, RoomInfoRepo, RoomRepo,
     RoomSocketsRepo, UserGuessRepo, UserPermissionsRepo, UserScoreRepo,
 };
 use crate::storage::sockets::HashMapClientSocketsStorage;
@@ -36,18 +40,18 @@ impl RoomRepo for HashMapRoomsStorage {
             status: RoomStatus::Waiting {
                 previous_location: None,
             },
-            banned_users_ids: vec![],
+            banned_public_users_ids: vec![],
             rounds_left: ROUNDS_PER_GAME,
         };
         self.storage.write().await.insert(room_id.clone(), room);
         room_id
     }
 
-    async fn has_user_with_such_username(
+    async fn has_different_user_with_same_username(
         &self,
         room_id: &str,
+        public_user_id: &str,
         username: &str,
-        user_id: &str,
     ) -> bool {
         self.storage
             .read()
@@ -56,10 +60,10 @@ impl RoomRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter()
-            .any(|user| user.name == username && user.id != user_id)
+            .any(|user| user.public_id != public_user_id && user.name == username)
     }
 
-    async fn has_user_with_such_id(&self, room_id: &str, user_id: &str) -> bool {
+    async fn has_user_with_such_private_id(&self, room_id: &str, private_user_id: &str) -> bool {
         self.storage
             .read()
             .await
@@ -67,10 +71,10 @@ impl RoomRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter()
-            .any(|user| user.id == user_id)
+            .any(|user| user.private_id == private_user_id)
     }
 
-    async fn user_is_host(&self, room_id: &str, user_id: &str) -> bool {
+    async fn user_is_host(&self, room_id: &str, public_user_id: &str) -> bool {
         self.storage
             .read()
             .await
@@ -78,7 +82,7 @@ impl RoomRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter()
-            .find(|user| user.id == user_id)
+            .find(|user| user.public_id == public_user_id)
             .map_or(false, |user| user.is_host)
     }
 
@@ -143,11 +147,19 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                 .iter()
                 .map(|user| user.socket_id)
                 .collect::<Vec<_>>();
-            let msg = if game_finished {
-                "{\"type\":\"gameFinished\",\"payload\":null}"
+            let game_or_round_finished_msg = if game_finished {
+                SocketMessage {
+                    r#type: SocketMessageType::GameFinished,
+                    payload: None,
+                }
             } else {
-                "{\"type\":\"roundFinished\",\"payload\":null}"
+                SocketMessage {
+                    r#type: SocketMessageType::RoundFinished,
+                    payload: None,
+                }
             };
+            let raw_game_or_round_finished_msg =
+                serde_json::to_string(&game_or_round_finished_msg).unwrap();
             // TODO: bad because duplicates the `self.get_current_round_number()` code
             let rounds_left = storage_handle
                 .read()
@@ -159,17 +171,21 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                 ROUNDS_PER_GAME => ROUNDS_PER_GAME,
                 _ => ROUNDS_PER_GAME + 1 - rounds_left,
             };
-            let bot_msg_content = format!("Раунд {round_number}/{ROUNDS_PER_GAME} закончился.");
-            let bot_msg = format!(
-                "{{\"type\": \"chatMessage\", \"payload\": {{\"from\": null,
-                \"content\": \"{}\", \"isFromBot\": true}}}}",
-                bot_msg_content,
-            );
-            let bot_message = ChatMessage {
-                is_from_bot: true,
-                author_name: None,
-                content: bot_msg_content,
+            let bot_chat_msg = BotMessage::RoundEnded {
+                round_number,
+                rounds_per_game: ROUNDS_PER_GAME,
             };
+            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
+            let bot_ws_msg = SocketMessage {
+                r#type: SocketMessageType::ChatMessage,
+                payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+                    from: None,
+                    content: raw_bot_chat_msg.clone(),
+                    is_from_bot: true,
+                })),
+            };
+            let raw_bot_ws_msg = serde_json::to_string(&bot_ws_msg).unwrap();
+            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
             // TODO: bad because duplicates the `self.add_new_message()` code
             storage_handle
                 .write()
@@ -178,9 +194,11 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                 .unwrap()
                 .add_message(bot_message);
             client_sockets
-                .broadcast_msg(&bot_msg, &all_sockets_ids)
+                .broadcast_msg(&raw_bot_ws_msg, &all_sockets_ids)
                 .await;
-            client_sockets.broadcast_msg(msg, &all_sockets_ids).await;
+            client_sockets
+                .broadcast_msg(&raw_game_or_round_finished_msg, &all_sockets_ids)
+                .await;
         });
     }
 
@@ -203,7 +221,8 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
         room_id: &str,
         msg_payload: BriefUserInfoPayload,
         socket_id: usize,
-        user_id: &str,
+        public_user_id: &str,
+        private_user_id: &str,
     ) -> Result<UserConnectedResult, ()> {
         let mut storage_guard = self.storage.write().await;
         let room_has_no_members = storage_guard.get(room_id).unwrap().users.is_empty();
@@ -219,14 +238,14 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter()
-            .any(|user| user.id == user_id);
+            .any(|user| user.private_id == private_user_id);
         if such_user_already_in_the_room {
             storage_guard
                 .get_mut(room_id)
                 .unwrap()
                 .users
                 .iter_mut()
-                .find(|user| user.id == user_id)
+                .find(|user| user.private_id == private_user_id)
                 .unwrap()
                 .socket_id = Some(socket_id);
             // TODO: comparison by user ID, not by usernames - return Err if exists
@@ -237,7 +256,8 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             .unwrap()
             .users
             .push(User::new(
-                user_id.to_string(),
+                public_user_id.to_string(),
+                private_user_id.to_string(),
                 msg_payload.username,
                 msg_payload.avatar_emoji,
                 room_has_no_members,
@@ -252,7 +272,7 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
         room_id: &str,
         _msg_payload: BriefUserInfoPayload,
         socket_id: usize,
-        user_id: &str,
+        private_user_id: &str,
     ) {
         self.storage
             .write()
@@ -261,7 +281,7 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter_mut()
-            .find(|user| user.id == user_id)
+            .find(|user| user.private_id == private_user_id)
             .unwrap()
             .socket_id = Some(socket_id);
     }
@@ -270,13 +290,13 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
         &self,
         room_id: &str,
         raw_msg: String,
-        user_id: &str,
+        private_user_id: &str,
         socket_id: usize,
         client_sockets: HashMapClientSocketsStorage,
     ) {
         let storage_handle = self.storage.clone();
         let room_id = room_id.to_string();
-        let user_id = user_id.to_string();
+        let private_user_id = private_user_id.to_string();
         let relevant_socket_ids = self.socket_ids_except_sender(&room_id, socket_id).await;
         tokio::spawn(async move {
             println!("[handle_user_disconnected]: waiting before disconnecting user...");
@@ -288,7 +308,7 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
                 .unwrap()
                 .users
                 .iter()
-                .any(|user| user.id == user_id && user.socket_id.is_some());
+                .any(|user| user.private_id == private_user_id && user.socket_id.is_some());
             if such_user_already_in_the_room {
                 return;
             }
@@ -298,7 +318,7 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
                 .users
                 .iter()
                 .enumerate()
-                .find(|(_idx, user)| user.id == user_id)
+                .find(|(_idx, user)| user.private_id == private_user_id)
                 .unwrap();
             let removed_user = storage_guard
                 .get_mut(&room_id)
@@ -308,20 +328,22 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             if removed_user.is_host {
                 storage_guard.get_mut(&room_id).unwrap().reassign_host()
             }
-
-            let content = format!("{} отключился.", removed_user.name);
-            let bot_message_content = format!(
-                "{{\"type\": \"chatMessage\", \"payload\": {{\"from\": null,
-                \"content\": \"{}\", \"isFromBot\": true}}}}",
-                content,
-            );
+            let bot_chat_msg = BotMessage::UserDisconnected {
+                username: &removed_user.name,
+            };
+            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
+            let ws_message = SocketMessage {
+                r#type: SocketMessageType::ChatMessage,
+                payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+                    from: None,
+                    content: raw_bot_chat_msg.clone(),
+                    is_from_bot: true,
+                })),
+            };
+            let bot_message_content = serde_json::to_string(&ws_message).unwrap();
             let mut all_sockets_ids = relevant_socket_ids.clone();
             all_sockets_ids.push(Some(socket_id));
-            let bot_message = ChatMessage {
-                is_from_bot: true,
-                author_name: None,
-                content,
-            };
+            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
             storage_guard
                 .get_mut(&room_id)
                 .unwrap()
@@ -389,7 +411,7 @@ impl RoomSocketsRepo for HashMapRoomsStorage {
 }
 
 impl UserScoreRepo for HashMapRoomsStorage {
-    async fn change_score(&self, room_id: &str, username: &str, amount: i64) {
+    async fn change_score(&self, room_id: &str, target_user_public_id: &str, amount: i64) {
         self.storage
             .write()
             .await
@@ -397,25 +419,25 @@ impl UserScoreRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter_mut()
-            .find(|user| user.name == *username)
+            .find(|user| user.public_id == *target_user_public_id)
             .unwrap()
             .change_score(amount)
     }
 }
 
 impl UserGuessRepo for HashMapRoomsStorage {
-    async fn submit_guess(&self, room_id: &str, user_id: &str, guess: LatLng) -> bool {
+    async fn submit_guess(&self, room_id: &str, private_user_id: &str, guess: LatLng) -> bool {
         let mut storage_guard = self.storage.write().await;
         let room = storage_guard.get_mut(room_id).unwrap();
         room.users
             .iter_mut()
-            .find(|user| user.id == *user_id)
+            .find(|user| user.private_id == *private_user_id)
             .unwrap()
             .submit_guess(guess, room.status);
         room.users.iter().all(|user| user.submitted_guess)
     }
 
-    async fn revoke_guess(&self, room_id: &str, user_id: &str) {
+    async fn revoke_guess(&self, room_id: &str, private_user_id: &str) {
         self.storage
             .write()
             .await
@@ -423,14 +445,14 @@ impl UserGuessRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter_mut()
-            .find(|user| user.id == *user_id)
+            .find(|user| user.private_id == *private_user_id)
             .unwrap()
             .revoke_guess();
     }
 }
 
 impl UserPermissionsRepo for HashMapRoomsStorage {
-    async fn mute(&self, room_id: &str, user_id_to_mute: &str) {
+    async fn mute(&self, room_id: &str, target_user_public_id: &str) {
         self.storage
             .write()
             .await
@@ -438,12 +460,12 @@ impl UserPermissionsRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter_mut()
-            .find(|user| user.name == *user_id_to_mute)
+            .find(|user| user.public_id == *target_user_public_id)
             .unwrap()
             .mute();
     }
 
-    async fn unmute(&self, room_id: &str, user_id_to_unmute: &str) {
+    async fn unmute(&self, room_id: &str, target_user_public_id: &str) {
         self.storage
             .write()
             .await
@@ -451,21 +473,21 @@ impl UserPermissionsRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter_mut()
-            .find(|user| user.name == *user_id_to_unmute)
+            .find(|user| user.public_id == *target_user_public_id)
             .unwrap()
             .unmute();
     }
 
-    async fn ban(&self, room_id: &str, user_name_to_ban: &str) {
+    async fn ban(&self, room_id: &str, target_user_public_id: &str) {
         self.storage
             .write()
             .await
             .get_mut(room_id)
             .unwrap()
-            .ban_user(user_name_to_ban)
+            .ban_user(target_user_public_id)
     }
 
-    async fn is_muted(&self, room_id: &str, user_id: &str) -> bool {
+    async fn is_muted(&self, room_id: &str, public_user_id: &str) -> bool {
         self.storage
             .read()
             .await
@@ -473,49 +495,41 @@ impl UserPermissionsRepo for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter()
-            .find(|user| user.id == user_id)
+            .find(|user| user.public_id == public_user_id)
             .map_or(false, |user| user.is_muted)
     }
 
-    async fn is_banned(&self, room_id: &str, user_id: &str) -> bool {
+    async fn is_banned(&self, room_id: &str, public_user_id: &str) -> bool {
         self.storage
             .read()
             .await
             .get(room_id)
             .unwrap()
-            .banned_users_ids
+            .banned_public_users_ids
             .iter()
-            .any(|id| id.as_str() == user_id)
+            .any(|public_id| public_id.as_str() == public_user_id)
     }
 }
 
-impl RoomInfoSerializer for HashMapRoomsStorage {
-    async fn status_as_json(&self, room_id: &str) -> String {
-        self.storage
-            .read()
-            .await
-            .get(room_id)
-            .unwrap()
-            .status
-            .as_json()
+impl RoomInfoRepo for HashMapRoomsStorage {
+    async fn status(&self, room_id: &str) -> RoomStatus {
+        self.storage.read().await.get(room_id).unwrap().status
     }
 
-    async fn users_as_json(&self, room_id: &str) -> String {
-        self.storage
-            .read()
-            .await
-            .get(room_id)
-            .unwrap()
-            .users_as_json()
+    async fn users(&self, room_id: &str) -> Vec<User> {
+        self.storage.read().await.get(room_id).unwrap().users()
     }
 
-    async fn messages_as_json(&self, room_id: &str) -> String {
+    async fn messages(&self, room_id: &str) -> Vec<ChatMessage> {
         self.storage
             .read()
             .await
             .get(room_id)
             .unwrap()
-            .messages_as_json()
+            .last_messages
+            .iter()
+            .cloned()
+            .collect()
     }
 }
 

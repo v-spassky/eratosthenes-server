@@ -1,6 +1,5 @@
 use crate::auth::responses::AcquireIdResponse;
 use crate::auth::user_id;
-use std::convert::Infallible;
 
 pub struct AuthHttpHandler {}
 
@@ -9,11 +8,11 @@ impl AuthHttpHandler {
         Self {}
     }
 
-    pub async fn acquire_id(&self) -> Result<String, Infallible> {
-        let response = AcquireIdResponse {
+    pub async fn acquire_id(&self) -> AcquireIdResponse {
+        AcquireIdResponse {
             error: false,
-            user_id: user_id::generate(),
-        };
-        Ok::<_, Infallible>(serde_json::to_string(&response).unwrap())
+            public_id: Some(user_id::generate()),
+            private_id: Some(user_id::generate()),
+        }
     }
 }
