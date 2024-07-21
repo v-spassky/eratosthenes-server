@@ -256,7 +256,7 @@ where
                     0 => ROUNDS_PER_GAME,
                     _ => ROUNDS_PER_GAME + 1 - rounds_left,
                 };
-                let bot_chat_msg = BotMessage::RoundEnded {
+                let bot_chat_msg = BotMessage::RoundStarted {
                     round_number,
                     rounds_per_game: ROUNDS_PER_GAME,
                 };
