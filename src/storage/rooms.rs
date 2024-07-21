@@ -2,8 +2,7 @@ use crate::map_locations::models::LatLng;
 use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
-    BriefUserInfoPayload, ChatMessagePayload, SocketMessage, SocketMessagePayload,
-    SocketMessageType,
+    self, BriefUserInfoPayload, ServerSentChatMessagePayload, ServerSentSocketMessage,
 };
 use crate::rooms::models::{ChatMessage, Room, RoomStatus};
 use crate::storage::consts::HOW_MUCH_LAST_MESSAGES_TO_STORE;
@@ -117,7 +116,11 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                     .iter()
                     .map(|user| user.socket_id)
                     .collect::<Vec<_>>();
-                let raw_msg = format!("{{\"type\":\"tick\",\"payload\":{tick}}}");
+                let ws_event_msg = ServerSentSocketMessage::Tick {
+                    r#type: message_types::Tick,
+                    payload: tick,
+                };
+                let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
                 tokio::time::sleep(Duration::from_secs(1)).await;
                 // Check if the game was finished because all players submitted a guess
                 // before the timer counted all the way down
@@ -129,7 +132,7 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                     return;
                 }
                 client_sockets
-                    .broadcast_msg(&raw_msg, &all_sockets_ids)
+                    .broadcast_msg(&raw_ws_event_msg, &all_sockets_ids)
                     .await;
             }
             let game_finished = storage_handle
@@ -148,14 +151,12 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                 .map(|user| user.socket_id)
                 .collect::<Vec<_>>();
             let game_or_round_finished_msg = if game_finished {
-                SocketMessage {
-                    r#type: SocketMessageType::GameFinished,
-                    payload: None,
+                ServerSentSocketMessage::GameFinished {
+                    r#type: message_types::GameFinished,
                 }
             } else {
-                SocketMessage {
-                    r#type: SocketMessageType::RoundFinished,
-                    payload: None,
+                ServerSentSocketMessage::RoundFinished {
+                    r#type: message_types::RoundFinished,
                 }
             };
             let raw_game_or_round_finished_msg =
@@ -176,16 +177,17 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                 rounds_per_game: ROUNDS_PER_GAME,
             };
             let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-            let bot_ws_msg = SocketMessage {
-                r#type: SocketMessageType::ChatMessage,
-                payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
+            let bot_ws_msg = ServerSentSocketMessage::ChatMessage {
+                r#type: message_types::ChatMessage,
+                payload: ServerSentChatMessagePayload {
+                    id: bot_message.id,
                     from: None,
-                    content: raw_bot_chat_msg.clone(),
+                    content: raw_bot_chat_msg,
                     is_from_bot: true,
-                })),
+                },
             };
             let raw_bot_ws_msg = serde_json::to_string(&bot_ws_msg).unwrap();
-            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
             // TODO: bad because duplicates the `self.add_new_message()` code
             storage_handle
                 .write()
@@ -332,18 +334,19 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
                 username: &removed_user.name,
             };
             let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-            let ws_message = SocketMessage {
-                r#type: SocketMessageType::ChatMessage,
-                payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
+            let ws_message = ServerSentSocketMessage::ChatMessage {
+                r#type: message_types::ChatMessage,
+                payload: ServerSentChatMessagePayload {
+                    id: bot_message.id,
                     from: None,
-                    content: raw_bot_chat_msg.clone(),
+                    content: raw_bot_chat_msg,
                     is_from_bot: true,
-                })),
+                },
             };
             let bot_message_content = serde_json::to_string(&ws_message).unwrap();
             let mut all_sockets_ids = relevant_socket_ids.clone();
             all_sockets_ids.push(Some(socket_id));
-            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
             storage_guard
                 .get_mut(&room_id)
                 .unwrap()
@@ -351,7 +354,6 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             client_sockets
                 .broadcast_msg(&bot_message_content, &all_sockets_ids)
                 .await;
-
             client_sockets
                 .broadcast_msg(&raw_msg, &relevant_socket_ids)
                 .await;

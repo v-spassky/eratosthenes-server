@@ -3,7 +3,8 @@ use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::MAX_MESSAGE_LENGTH;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
-    ChatMessagePayload, SocketMessage, SocketMessagePayload, SocketMessageType,
+    self, BriefUserInfoPayload, ClientSentSocketMessage, ServerSentChatMessagePayload,
+    ServerSentSocketMessage,
 };
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
@@ -77,17 +78,19 @@ where
     }
 
     async fn on_new_message(&self, msg: Message) {
-        let msg = if let Ok(s) = msg.to_str() {
+        let raw_incoming_msg = if let Ok(s) = msg.to_str() {
             s
         } else {
             eprintln!("[user_message]: error deserializing such message (1): {msg:?}");
             return;
         };
 
-        let socket_message: Result<SocketMessage, _> = serde_json::from_str(msg);
+        let socket_message: Result<ClientSentSocketMessage, _> =
+            serde_json::from_str(raw_incoming_msg);
         if socket_message.is_err() {
             eprintln!(
-                "[user_message]: error deserializing such message (2): {msg:?}, {socket_message:?}"
+                "[user_message]: error deserializing such message (2): {raw_incoming_msg:?}, \
+                {socket_message:?}"
             );
             return;
         }
@@ -97,26 +100,19 @@ where
             .socket_ids_except_sender(&self.request_context.room_id, self.socket_id)
             .await;
         let socket_message = socket_message.unwrap();
-        match socket_message.r#type {
-            SocketMessageType::ChatMessage => {
+        match socket_message {
+            ClientSentSocketMessage::ChatMessage { payload, .. } => {
                 if self
                     .app_context
                     .rooms
-                    .is_muted(&self.request_context.room_id, &self.request_context.public_id)
+                    .is_muted(
+                        &self.request_context.room_id,
+                        &self.request_context.public_id,
+                    )
                     .await
                 {
                     return;
                 }
-                let payload = match socket_message.payload {
-                    Some(SocketMessagePayload::ChatMessage(payload)) => payload,
-                    _ => {
-                        eprintln!(
-                            "[user_message]: error deserializing such message (3): {:?}",
-                            msg
-                        );
-                        return;
-                    }
-                };
                 if payload.content.graphemes(true).count() > MAX_MESSAGE_LENGTH {
                     eprintln!(
                         "Rejecting a message because the it is too long: \
@@ -127,61 +123,74 @@ where
                     return;
                 }
                 let chat_message =
-                    ChatMessage::new(false, payload.from.clone(), payload.content.clone());
+                    ChatMessage::new(false, Some(payload.from.clone()), payload.content.clone());
+                let ws_chat_message = ServerSentSocketMessage::ChatMessage {
+                    r#type: message_types::ChatMessage,
+                    payload: ServerSentChatMessagePayload {
+                        id: chat_message.id,
+                        from: Some(payload.from),
+                        content: payload.content,
+                        is_from_bot: false,
+                    },
+                };
+                let raw_chat_message = serde_json::to_string(&ws_chat_message).unwrap();
                 self.app_context
                     .rooms
                     .add_message(&self.request_context.room_id, chat_message)
                     .await;
+                self.app_context
+                    .sockets
+                    .broadcast_msg(&raw_chat_message, &relevant_socket_ids)
+                    .await;
             }
-            SocketMessageType::UserConnected => {
-                let payload = match socket_message.payload {
-                    Some(SocketMessagePayload::BriefUserInfo(payload)) => {
-                        if !self
-                            .app_context
-                            .rooms
-                            .has_user_with_such_private_id(
-                                &self.request_context.room_id,
-                                &self.request_context.private_id,
-                            )
-                            .await
-                        {
-                            let bot_chat_msg = BotMessage::UserConnected {
-                                username: &payload.username,
-                            };
-                            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-                            let ws_message = SocketMessage {
-                                r#type: SocketMessageType::ChatMessage,
-                                payload: Some(SocketMessagePayload::ChatMessage(
-                                    ChatMessagePayload {
-                                        from: None,
-                                        content: raw_bot_chat_msg.clone(),
-                                        is_from_bot: true,
-                                    },
-                                )),
-                            };
-                            let msg = serde_json::to_string(&ws_message).unwrap();
-                            let mut all_sockets_ids = relevant_socket_ids.clone();
-                            all_sockets_ids.push(Some(self.socket_id));
-                            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
-                            self.app_context
-                                .rooms
-                                .add_message(&self.request_context.room_id, bot_message)
-                                .await;
-                            self.app_context
-                                .sockets
-                                .broadcast_msg(&msg, &all_sockets_ids)
-                                .await;
-                        }
-                        payload
-                    }
-                    _ => {
-                        eprintln!(
-                            "[user_message]: error deserializing such message (3): {:?}",
-                            msg
-                        );
-                        return;
-                    }
-                };
+            ClientSentSocketMessage::UserConnected { payload, .. } => {
+                if !self
+                    .app_context
+                    .rooms
+                    .has_user_with_such_private_id(
+                        &self.request_context.room_id,
+                        &self.request_context.private_id,
+                    )
+                    .await
+                {
+                    let bot_chat_msg = BotMessage::UserConnected {
+                        username: &payload.username,
+                    };
+                    let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
+                    let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
+                    let ws_message = ServerSentSocketMessage::ChatMessage {
+                        r#type: message_types::ChatMessage,
+                        payload: ServerSentChatMessagePayload {
+                            id: bot_message.id,
+                            from: None,
+                            content: raw_bot_chat_msg,
+                            is_from_bot: true,
+                        },
+                    };
+                    let msg = serde_json::to_string(&ws_message).unwrap();
+                    let mut all_sockets_ids = relevant_socket_ids.clone();
+                    all_sockets_ids.push(Some(self.socket_id));
+                    let ws_event = ServerSentSocketMessage::UserConnected {
+                        r#type: message_types::UserConnected,
+                        payload: BriefUserInfoPayload {
+                            username: payload.username.clone(),
+                            avatar_emoji: payload.avatar_emoji.clone(),
+                        },
+                    };
+                    let raw_ws_event = serde_json::to_string(&ws_event).unwrap();
+                    self.app_context
+                        .rooms
+                        .add_message(&self.request_context.room_id, bot_message)
+                        .await;
+                    self.app_context
+                        .sockets
+                        .broadcast_msg(&msg, &all_sockets_ids)
+                        .await;
+                    self.app_context
+                        .sockets
+                        .broadcast_msg(&raw_ws_event, &relevant_socket_ids)
+                        .await;
+                }
                 match self
                     .app_context
                     .rooms
@@ -194,26 +203,22 @@ where
                     )
                     .await
                 {
-                    Ok(UserConnectedResult::NewUser) => {}
-                    Ok(UserConnectedResult::AlreadyInTheRoom) => {
-                        return;
+                    Ok(UserConnectedResult::NewUser) => {
+                        // TODO
+                        self.app_context
+                            .sockets
+                            .broadcast_msg(raw_incoming_msg, &relevant_socket_ids)
+                            .await;
                     }
+                    Ok(UserConnectedResult::AlreadyInTheRoom) => {}
                     Err(_) => {
                         eprintln!(
-                            "[user_message]: user with such name already connected : {msg:?}."
+                            "[user_message]: user with such name already connected : {raw_incoming_msg:?}."
                         );
-                        return;
                     }
                 }
             }
-            SocketMessageType::UserReConnected => {
-                let payload = match socket_message.payload {
-                    Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
-                    _ => {
-                        eprintln!("[user_message]: error deserializing such message (4): {msg:?}");
-                        return;
-                    }
-                };
+            ClientSentSocketMessage::UserReConnected { payload, .. } => {
                 self.app_context
                     .rooms
                     .on_user_reconnected(
@@ -223,29 +228,28 @@ where
                         &self.request_context.private_id,
                     )
                     .await;
-                return;
             }
-            SocketMessageType::UserDisconnected => {
-                let _payload = match socket_message.payload {
-                    Some(SocketMessagePayload::BriefUserInfo(payload)) => payload,
-                    _ => {
-                        eprintln!("[user_message]: error deserializing such message (5): {msg:?}");
-                        return;
-                    }
+            ClientSentSocketMessage::UserDisconnected { payload, .. } => {
+                let ws_event = ServerSentSocketMessage::UserDisconnected {
+                    r#type: message_types::UserDisconnected,
+                    payload: BriefUserInfoPayload {
+                        username: payload.username.clone(),
+                        avatar_emoji: payload.avatar_emoji.clone(),
+                    },
                 };
+                let raw_ws_event = serde_json::to_string(&ws_event).unwrap();
                 self.app_context
                     .rooms
                     .on_user_disconnected(
                         &self.request_context.room_id,
-                        msg.to_string(),
+                        raw_ws_event,
                         &self.request_context.private_id,
                         self.socket_id,
                         self.app_context.sockets.clone(),
                     )
                     .await;
-                return;
             }
-            SocketMessageType::RoundStarted => {
+            ClientSentSocketMessage::RoundStarted { .. } => {
                 // TODO: Check if the user is host
                 let rounds_left = self
                     .app_context
@@ -261,18 +265,19 @@ where
                     rounds_per_game: ROUNDS_PER_GAME,
                 };
                 let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-                let ws_message = SocketMessage {
-                    r#type: SocketMessageType::ChatMessage,
-                    payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+                let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
+                let ws_message = ServerSentSocketMessage::ChatMessage {
+                    r#type: message_types::ChatMessage,
+                    payload: ServerSentChatMessagePayload {
+                        id: bot_message.id,
                         from: None,
-                        content: raw_bot_chat_msg.clone(),
+                        content: raw_bot_chat_msg,
                         is_from_bot: true,
-                    })),
+                    },
                 };
                 let msg = serde_json::to_string(&ws_message).unwrap();
                 let mut all_sockets_ids = relevant_socket_ids.clone();
                 all_sockets_ids.push(Some(self.socket_id));
-                let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
                 self.app_context
                     .rooms
                     .add_message(&self.request_context.room_id, bot_message)
@@ -288,35 +293,26 @@ where
                         self.app_context.sockets.clone(),
                     )
                     .await;
+                let ws_event = ServerSentSocketMessage::RoundStarted {
+                    r#type: message_types::RoundStarted,
+                };
+                let raw_ws_event = serde_json::to_string(&ws_event).unwrap();
+                self.app_context
+                    .sockets
+                    .broadcast_msg(&raw_ws_event, &relevant_socket_ids)
+                    .await;
             }
-            SocketMessageType::RoundFinished => {
-                // TODO: Check if the user is host + this should be coming from the server, not the
-                // client
-                // TODO: delete this message type and handler
-                return;
-            }
-            SocketMessageType::GuessSubmitted => {}
-            SocketMessageType::GuessRevoked => {}
-            SocketMessageType::Ping => {
-                let ws_message = SocketMessage {
-                    r#type: SocketMessageType::Pong,
-                    payload: None,
+            ClientSentSocketMessage::Ping { .. } => {
+                let ws_message = ServerSentSocketMessage::Pong {
+                    r#type: message_types::Pong,
                 };
                 let msg = serde_json::to_string(&ws_message).unwrap();
                 self.app_context
                     .sockets
                     .send_msg(&msg, self.socket_id)
                     .await;
-                return;
-            }
-            _ => {
-                return;
             }
         }
-        self.app_context
-            .sockets
-            .broadcast_msg(msg, &relevant_socket_ids)
-            .await;
     }
 
     async fn on_user_disconnected(&self) {
