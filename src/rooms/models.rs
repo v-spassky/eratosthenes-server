@@ -2,7 +2,7 @@ use crate::map_locations::{self, models::LatLng};
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::storage::consts::HOW_MUCH_LAST_MESSAGES_TO_STORE;
 use crate::users::models::User;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -100,7 +100,7 @@ pub enum RoomStatus {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     pub id: usize,

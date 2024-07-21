@@ -3,7 +3,7 @@ use crate::map_locations::models::LatLng;
 use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
-    ChatMessagePayload, SocketMessage, SocketMessagePayload, SocketMessageType, UserPubIdInfoPayload,
+    self, ServerSentChatMessagePayload, ServerSentSocketMessage, UserPubIdInfoPayload,
 };
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
@@ -54,9 +54,8 @@ where
             .submit_guess(&self.request_context.room_id, &self.request_context.private_id, guess)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
-        let msg = SocketMessage {
-            r#type: SocketMessageType::GuessSubmitted,
-            payload: None,
+        let msg = ServerSentSocketMessage::GuessSubmitted {
+            r#type: message_types::GuessSubmitted,
         };
         let msg = serde_json::to_string(&msg).unwrap();
         self.app_context
@@ -66,13 +65,11 @@ where
         if round_finished {
             let game_finished = self.app_context.rooms.finish_game(&self.request_context.room_id).await;
             let event_msg = match game_finished {
-                true => SocketMessage {
-                    r#type: SocketMessageType::GameFinished,
-                    payload: None,
+                true => ServerSentSocketMessage::GameFinished {
+                    r#type: message_types::GameFinished,
                 },
-                false => SocketMessage {
-                    r#type: SocketMessageType::RoundFinished,
-                    payload: None,
+                false => ServerSentSocketMessage::RoundFinished {
+                    r#type: message_types::RoundFinished,
                 },
             };
             let raw_event_msg = serde_json::to_string(&event_msg).unwrap();
@@ -90,16 +87,17 @@ where
                 rounds_per_game: ROUNDS_PER_GAME,
             };
             let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-            let bot_ws_msg = SocketMessage {
-                r#type: SocketMessageType::ChatMessage,
-                payload: Some(SocketMessagePayload::ChatMessage(ChatMessagePayload {
+            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
+            let bot_ws_msg = ServerSentSocketMessage::ChatMessage {
+                r#type: message_types::ChatMessage,
+                payload: ServerSentChatMessagePayload {
+                    id: bot_message.id,
                     from: None,
-                    content: raw_bot_chat_msg.clone(),
+                    content: raw_bot_chat_msg,
                     is_from_bot: true,
-                })),
+                },
             };
             let raw_bot_ws_msg = serde_json::to_string(&bot_ws_msg).unwrap();
-            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg);
             self.app_context
                 .rooms
                 .add_message(&self.request_context.room_id, bot_message)
@@ -131,9 +129,8 @@ where
             .revoke_guess(&self.request_context.room_id, &self.request_context.private_id)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
-        let msg = SocketMessage {
-            r#type: SocketMessageType::GuessRevoked,
-            payload: None,
+        let msg = ServerSentSocketMessage::GuessRevoked {
+            r#type: message_types::GuessRevoked,
         };
         let msg = serde_json::to_string(&msg).unwrap();
         self.app_context
@@ -169,9 +166,8 @@ where
             .mute(&self.request_context.room_id, &target_user_public_id)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
-        let ws_event_msg = SocketMessage {
-            r#type: SocketMessageType::UserMuted,
-            payload: None,
+        let ws_event_msg = ServerSentSocketMessage::UserMuted {
+            r#type: message_types::UserMuted,
         };
         let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
@@ -207,9 +203,8 @@ where
             .unmute(&self.request_context.room_id, &target_user_public_id)
             .await;
         let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
-        let ws_event_msg = SocketMessage {
-            r#type: SocketMessageType::UserUnmuted,
-            payload: None,
+        let ws_event_msg = ServerSentSocketMessage::UserUnmuted {
+            r#type: message_types::UserUnmuted,
         };
         let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
@@ -245,12 +240,11 @@ where
             .rooms
             .ban(&self.request_context.room_id, &target_user_public_id)
             .await;
-        let ws_event_msg = SocketMessage {
-            r#type: SocketMessageType::UserBanned,
-            payload: Some(SocketMessagePayload::Username(UserPubIdInfoPayload {
-                // TODO: update code from username to id
+        let ws_event_msg = ServerSentSocketMessage::UserBanned {
+            r#type: message_types::UserBanned,
+            payload: UserPubIdInfoPayload {
                 public_id: target_user_public_id,
-            })),
+            },
         };
         let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
@@ -286,10 +280,13 @@ where
             .rooms
             .change_score(&self.request_context.room_id, &target_user_public_id, amount)
             .await;
-        let msg = "{\"type\": \"userScoreChanged\", \"payload\": null}".to_string();
+        let ws_event_msg = ServerSentSocketMessage::UserScoreChanged {
+            r#type: message_types::UserScoreChanged,
+        };
+        let raw_ws_event_msg = serde_json::to_string(&ws_event_msg).unwrap();
         self.app_context
             .sockets
-            .broadcast_msg(&msg, &room_sockets_ids)
+            .broadcast_msg(&raw_ws_event_msg, &room_sockets_ids)
             .await;
         ChangeScoreResponse {
             error: false,
