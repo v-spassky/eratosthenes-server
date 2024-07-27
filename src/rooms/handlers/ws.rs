@@ -1,4 +1,5 @@
 use crate::app_context::{AppContext, RequestContext};
+use crate::logging::consts::DEFAULT_CLIENT_IP;
 use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::MAX_MESSAGE_LENGTH;
 use crate::rooms::consts::ROUNDS_PER_GAME;
@@ -13,7 +14,9 @@ use futures_util::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt, TryFutureExt,
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use unicode_segmentation::UnicodeSegmentation;
 use warp::ws::{Message, WebSocket};
@@ -78,6 +81,11 @@ where
     }
 
     async fn on_new_message(&self, msg: Message) {
+        let start_time = Instant::now();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
         let raw_incoming_msg = if let Ok(s) = msg.to_str() {
             s
         } else {
@@ -100,6 +108,7 @@ where
             .socket_ids_except_sender(&self.request_context.room_id, self.socket_id)
             .await;
         let socket_message = socket_message.unwrap();
+        let message_type = socket_message.message_type_as_string();
         match socket_message {
             ClientSentSocketMessage::ChatMessage { payload, .. } => {
                 if self
@@ -313,6 +322,19 @@ where
                     .await;
             }
         }
+        let processing_time_ns = start_time.elapsed().as_nanos();
+        tracing::info!(
+            task = "client_sent_ws_message",
+            message_type = message_type,
+            client_ip = self
+                .request_context
+                .client_ip
+                .unwrap_or(DEFAULT_CLIENT_IP)
+                .ip()
+                .to_string(),
+            processing_time_ms = processing_time_ns / 1000,
+            timestamp = timestamp,
+        );
     }
 
     async fn on_user_disconnected(&self) {

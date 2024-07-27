@@ -1,0 +1,33 @@
+version: 0.7
+
+index_id: http_requests
+
+doc_mapping:
+  mode: lenient
+  field_mappings:
+    - name: task
+      type: text
+      fast: true
+    - name: http_method
+      type: text
+      fast: true
+    - name: endpoint
+      type: text
+      fast: true
+    - name: client_ip
+      type: ip
+      fast: true
+    - name: processing_time_ms
+      type: u64
+      fast: true
+    - name: timestamp
+      type: datetime
+      input_formats:
+        - unix_timestamp
+      precision: seconds
+      fast: true
+  timestamp_field: timestamp
+
+retention:
+  period: 30 days
+  schedule: daily
