@@ -28,6 +28,28 @@ pub enum ClientSentSocketMessage {
     },
 }
 
+#[macro_export]
+macro_rules! name_of {
+    ($name:ident) => {{
+        let _ = &$name;
+        stringify!($name)
+    }};
+}
+
+impl ClientSentSocketMessage {
+    pub fn message_type_as_string(&self) -> String {
+        match self {
+            ClientSentSocketMessage::ChatMessage { .. } => name_of!(ChatMessage),
+            ClientSentSocketMessage::UserConnected { .. } => name_of!(UserConnected),
+            ClientSentSocketMessage::UserReConnected { .. } => name_of!(UserReConnected),
+            ClientSentSocketMessage::UserDisconnected { .. } => name_of!(UserDisconnected),
+            ClientSentSocketMessage::RoundStarted { .. } => name_of!(RoundStarted),
+            ClientSentSocketMessage::Ping { .. } => name_of!(Ping),
+        }
+        .to_string()
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ServerSentSocketMessage {

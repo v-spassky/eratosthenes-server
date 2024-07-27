@@ -30,19 +30,32 @@ where
     }
 
     pub async fn is_host(&self) -> IsUserTheHostResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return IsUserTheHostResponse { is_host: false };
         }
         let is_host = self
             .app_context
             .rooms
-            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
+            .user_is_host(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+            )
             .await;
         IsUserTheHostResponse { is_host }
     }
 
     pub async fn submit_guess(&self, guess: LatLng) -> SubmitGuessResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return SubmitGuessResponse {
                 error: true,
                 error_code: Some(GuessSubmissionError::RoomNotFound),
@@ -51,9 +64,17 @@ where
         let round_finished = self
             .app_context
             .rooms
-            .submit_guess(&self.request_context.room_id, &self.request_context.private_id, guess)
+            .submit_guess(
+                &self.request_context.room_id,
+                &self.request_context.private_id,
+                guess,
+            )
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let room_sockets_ids = self
+            .app_context
+            .rooms
+            .all_socket_ids(&self.request_context.room_id)
+            .await;
         let msg = ServerSentSocketMessage::GuessSubmitted {
             r#type: message_types::GuessSubmitted,
         };
@@ -63,7 +84,11 @@ where
             .broadcast_msg(&msg, &room_sockets_ids)
             .await;
         if round_finished {
-            let game_finished = self.app_context.rooms.finish_game(&self.request_context.room_id).await;
+            let game_finished = self
+                .app_context
+                .rooms
+                .finish_game(&self.request_context.room_id)
+                .await;
             let event_msg = match game_finished {
                 true => ServerSentSocketMessage::GameFinished {
                     r#type: message_types::GameFinished,
@@ -118,7 +143,12 @@ where
     }
 
     pub async fn revoke_guess(&self) -> RevokeGuessResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return RevokeGuessResponse {
                 error: true,
                 error_code: Some(GuessRevocationError::RoomNotFound),
@@ -126,9 +156,16 @@ where
         }
         self.app_context
             .rooms
-            .revoke_guess(&self.request_context.room_id, &self.request_context.private_id)
+            .revoke_guess(
+                &self.request_context.room_id,
+                &self.request_context.private_id,
+            )
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let room_sockets_ids = self
+            .app_context
+            .rooms
+            .all_socket_ids(&self.request_context.room_id)
+            .await;
         let msg = ServerSentSocketMessage::GuessRevoked {
             r#type: message_types::GuessRevoked,
         };
@@ -144,7 +181,12 @@ where
     }
 
     pub async fn mute(&self, target_user_public_id: String) -> MuteUserResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return MuteUserResponse {
                 error: true,
                 error_code: Some(UserMutingError::RoomNotFound),
@@ -153,7 +195,10 @@ where
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
+            .user_is_host(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+            )
             .await
         {
             return MuteUserResponse {
@@ -165,7 +210,11 @@ where
             .rooms
             .mute(&self.request_context.room_id, &target_user_public_id)
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let room_sockets_ids = self
+            .app_context
+            .rooms
+            .all_socket_ids(&self.request_context.room_id)
+            .await;
         let ws_event_msg = ServerSentSocketMessage::UserMuted {
             r#type: message_types::UserMuted,
         };
@@ -181,7 +230,12 @@ where
     }
 
     pub async fn unmute(&self, target_user_public_id: String) -> UnmuteUserResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return UnmuteUserResponse {
                 error: true,
                 error_code: Some(UserUnmutingError::RoomNotFound),
@@ -190,7 +244,10 @@ where
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
+            .user_is_host(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+            )
             .await
         {
             return UnmuteUserResponse {
@@ -202,7 +259,11 @@ where
             .rooms
             .unmute(&self.request_context.room_id, &target_user_public_id)
             .await;
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let room_sockets_ids = self
+            .app_context
+            .rooms
+            .all_socket_ids(&self.request_context.room_id)
+            .await;
         let ws_event_msg = ServerSentSocketMessage::UserUnmuted {
             r#type: message_types::UserUnmuted,
         };
@@ -218,7 +279,12 @@ where
     }
 
     pub async fn ban(&self, target_user_public_id: String) -> BanUserResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return BanUserResponse {
                 error: true,
                 error_code: Some(UserBanningError::RoomNotFound),
@@ -227,7 +293,10 @@ where
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
+            .user_is_host(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+            )
             .await
         {
             return BanUserResponse {
@@ -235,7 +304,11 @@ where
                 error_code: Some(UserBanningError::YouAreNotTheHost),
             };
         }
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let room_sockets_ids = self
+            .app_context
+            .rooms
+            .all_socket_ids(&self.request_context.room_id)
+            .await;
         self.app_context
             .rooms
             .ban(&self.request_context.room_id, &target_user_public_id)
@@ -257,8 +330,17 @@ where
         }
     }
 
-    pub async fn change_score(&self, target_user_public_id: String, amount: i64) -> ChangeScoreResponse {
-        if !self.app_context.rooms.exists(&self.request_context.room_id).await {
+    pub async fn change_score(
+        &self,
+        target_user_public_id: String,
+        amount: i64,
+    ) -> ChangeScoreResponse {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
             return ChangeScoreResponse {
                 error: true,
                 error_code: Some(ScoreChangeError::RoomNotFound),
@@ -267,7 +349,10 @@ where
         if !self
             .app_context
             .rooms
-            .user_is_host(&self.request_context.room_id, &self.request_context.public_id)
+            .user_is_host(
+                &self.request_context.room_id,
+                &self.request_context.public_id,
+            )
             .await
         {
             return ChangeScoreResponse {
@@ -275,10 +360,18 @@ where
                 error_code: Some(ScoreChangeError::YouAreNotTheHost),
             };
         }
-        let room_sockets_ids = self.app_context.rooms.all_socket_ids(&self.request_context.room_id).await;
+        let room_sockets_ids = self
+            .app_context
+            .rooms
+            .all_socket_ids(&self.request_context.room_id)
+            .await;
         self.app_context
             .rooms
-            .change_score(&self.request_context.room_id, &target_user_public_id, amount)
+            .change_score(
+                &self.request_context.room_id,
+                &target_user_public_id,
+                amount,
+            )
             .await;
         let ws_event_msg = ServerSentSocketMessage::UserScoreChanged {
             r#type: message_types::UserScoreChanged,

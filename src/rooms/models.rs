@@ -75,8 +75,10 @@ impl Room {
     }
 
     pub fn ban_user(&mut self, target_user_public_id: &str) {
-        self.users.retain(|user| user.public_id != target_user_public_id);
-        self.banned_public_users_ids.push(target_user_public_id.to_string());
+        self.users
+            .retain(|user| user.public_id != target_user_public_id);
+        self.banned_public_users_ids
+            .push(target_user_public_id.to_string());
     }
 
     pub fn users(&self) -> Vec<User> {
