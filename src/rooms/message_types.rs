@@ -57,6 +57,12 @@ pub enum ServerSentSocketMessage {
         r#type: ChatMessage,
         payload: ServerSentChatMessagePayload,
     },
+    BotMessage {
+        r#type: BotMessage,
+        /// TODO: ideally `id` should be inside `payload`
+        id: usize,
+        payload: BotMessagePayload,
+    },
     UserConnected {
         r#type: UserConnected,
         payload: BriefUserInfoPayload,
@@ -104,6 +110,9 @@ pub enum ServerSentSocketMessage {
 
 #[derive(Debug, Serialize_unit_struct, Deserialize_unit_struct)]
 pub struct ChatMessage;
+
+#[derive(Debug, Serialize_unit_struct, Deserialize_unit_struct)]
+pub struct BotMessage;
 
 #[derive(Debug, Serialize_unit_struct, Deserialize_unit_struct)]
 pub struct UserConnected;
@@ -160,9 +169,63 @@ pub struct ClientSentChatMessagePayload {
 #[serde(rename_all = "camelCase")]
 pub struct ServerSentChatMessagePayload {
     pub id: usize,
-    pub from: Option<String>,
+    pub from: String,
     pub content: String,
-    pub is_from_bot: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(untagged)]
+pub enum BotMessagePayload {
+    RoundStarted {
+        r#type: RoundStartedBotMsg,
+        payload: RoundStartedBotMessagePayload,
+    },
+    RoundEnded {
+        r#type: RoundEndedBotMsg,
+        payload: RoundEndedBotMessagePayload,
+    },
+    UserConnected {
+        r#type: UserConnectedBotMsg,
+        payload: UserConnectedBotMessagePayload,
+    },
+    UserDisconnected {
+        r#type: UserDisconnectedBotMsg,
+        payload: UserDisconnectedBotMessagePayload,
+    },
+}
+
+#[derive(Clone, Debug, Serialize_unit_struct)]
+pub struct RoundStartedBotMsg;
+
+#[derive(Clone, Debug, Serialize_unit_struct)]
+pub struct RoundEndedBotMsg;
+
+#[derive(Clone, Debug, Serialize_unit_struct)]
+pub struct UserConnectedBotMsg;
+
+#[derive(Clone, Debug, Serialize_unit_struct)]
+pub struct UserDisconnectedBotMsg;
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RoundStartedBotMessagePayload {
+    pub round_number: u64,
+    pub rounds_per_game: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct RoundEndedBotMessagePayload {
+    pub round_number: u64,
+    pub rounds_per_game: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct UserConnectedBotMessagePayload {
+    pub username: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct UserDisconnectedBotMessagePayload {
+    pub username: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

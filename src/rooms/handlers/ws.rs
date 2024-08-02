@@ -1,11 +1,11 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::logging::consts::DEFAULT_CLIENT_IP;
-use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::MAX_MESSAGE_LENGTH;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
-    self, BriefUserInfoPayload, ClientSentSocketMessage, ServerSentChatMessagePayload,
-    ServerSentSocketMessage,
+    self, BotMessagePayload, BriefUserInfoPayload, ClientSentSocketMessage,
+    RoundStartedBotMessagePayload, RoundStartedBotMsg, ServerSentChatMessagePayload,
+    ServerSentSocketMessage, UserConnectedBotMessagePayload, UserConnectedBotMsg,
 };
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
@@ -132,14 +132,13 @@ where
                     return;
                 }
                 let chat_message =
-                    ChatMessage::new(false, Some(payload.from.clone()), payload.content.clone());
+                    ChatMessage::from_player(payload.from.clone(), payload.content.clone());
                 let ws_chat_message = ServerSentSocketMessage::ChatMessage {
                     r#type: message_types::ChatMessage,
                     payload: ServerSentChatMessagePayload {
-                        id: chat_message.id,
-                        from: Some(payload.from),
+                        id: chat_message.id(),
+                        from: payload.from,
                         content: payload.content,
-                        is_from_bot: false,
                     },
                 };
                 let raw_chat_message = serde_json::to_string(&ws_chat_message).unwrap();
@@ -162,19 +161,17 @@ where
                     )
                     .await
                 {
-                    let bot_chat_msg = BotMessage::UserConnected {
-                        username: &payload.username,
-                    };
-                    let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-                    let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
-                    let ws_message = ServerSentSocketMessage::ChatMessage {
-                        r#type: message_types::ChatMessage,
-                        payload: ServerSentChatMessagePayload {
-                            id: bot_message.id,
-                            from: None,
-                            content: raw_bot_chat_msg,
-                            is_from_bot: true,
+                    let bot_message_payload = BotMessagePayload::UserConnected {
+                        r#type: UserConnectedBotMsg,
+                        payload: UserConnectedBotMessagePayload {
+                            username: payload.username.clone(),
                         },
+                    };
+                    let bot_message = ChatMessage::from_bot(bot_message_payload.clone());
+                    let ws_message = ServerSentSocketMessage::BotMessage {
+                        r#type: message_types::BotMessage,
+                        id: bot_message.id(),
+                        payload: bot_message_payload,
                     };
                     let msg = serde_json::to_string(&ws_message).unwrap();
                     let mut all_sockets_ids = relevant_socket_ids.clone();
@@ -269,20 +266,18 @@ where
                     0 => ROUNDS_PER_GAME,
                     _ => ROUNDS_PER_GAME + 1 - rounds_left,
                 };
-                let bot_chat_msg = BotMessage::RoundStarted {
-                    round_number,
-                    rounds_per_game: ROUNDS_PER_GAME,
-                };
-                let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-                let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
-                let ws_message = ServerSentSocketMessage::ChatMessage {
-                    r#type: message_types::ChatMessage,
-                    payload: ServerSentChatMessagePayload {
-                        id: bot_message.id,
-                        from: None,
-                        content: raw_bot_chat_msg,
-                        is_from_bot: true,
+                let bot_message_payload = BotMessagePayload::RoundStarted {
+                    r#type: RoundStartedBotMsg,
+                    payload: RoundStartedBotMessagePayload {
+                        round_number,
+                        rounds_per_game: ROUNDS_PER_GAME,
                     },
+                };
+                let bot_message = ChatMessage::from_bot(bot_message_payload.clone());
+                let ws_message = ServerSentSocketMessage::BotMessage {
+                    r#type: message_types::BotMessage,
+                    id: bot_message.id(),
+                    payload: bot_message_payload,
                 };
                 let msg = serde_json::to_string(&ws_message).unwrap();
                 let mut all_sockets_ids = relevant_socket_ids.clone();

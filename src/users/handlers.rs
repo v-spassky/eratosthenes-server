@@ -1,9 +1,9 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::map_locations::models::LatLng;
-use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
-    self, ServerSentChatMessagePayload, ServerSentSocketMessage, UserPubIdInfoPayload,
+    self, BotMessagePayload, RoundEndedBotMessagePayload, RoundEndedBotMsg,
+    ServerSentSocketMessage, UserPubIdInfoPayload,
 };
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
@@ -107,20 +107,18 @@ where
                 ROUNDS_PER_GAME => ROUNDS_PER_GAME,
                 _ => ROUNDS_PER_GAME - rounds_left,
             };
-            let bot_chat_msg = BotMessage::RoundEnded {
-                round_number,
-                rounds_per_game: ROUNDS_PER_GAME,
-            };
-            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
-            let bot_ws_msg = ServerSentSocketMessage::ChatMessage {
-                r#type: message_types::ChatMessage,
-                payload: ServerSentChatMessagePayload {
-                    id: bot_message.id,
-                    from: None,
-                    content: raw_bot_chat_msg,
-                    is_from_bot: true,
+            let bot_message_payload = BotMessagePayload::RoundEnded {
+                r#type: RoundEndedBotMsg,
+                payload: RoundEndedBotMessagePayload {
+                    round_number,
+                    rounds_per_game: ROUNDS_PER_GAME,
                 },
+            };
+            let bot_message = ChatMessage::from_bot(bot_message_payload.clone());
+            let bot_ws_msg = ServerSentSocketMessage::BotMessage {
+                r#type: message_types::BotMessage,
+                id: bot_message.id(),
+                payload: bot_message_payload,
             };
             let raw_bot_ws_msg = serde_json::to_string(&bot_ws_msg).unwrap();
             self.app_context
