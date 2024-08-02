@@ -1,8 +1,9 @@
 use crate::map_locations::models::LatLng;
-use crate::rooms::bot_messages::BotMessage;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
-    self, BriefUserInfoPayload, ServerSentChatMessagePayload, ServerSentSocketMessage,
+    self, BotMessagePayload, BriefUserInfoPayload, RoundStartedBotMessagePayload,
+    RoundStartedBotMsg, ServerSentSocketMessage, UserDisconnectedBotMessagePayload,
+    UserDisconnectedBotMsg,
 };
 use crate::rooms::models::{ChatMessage, Room, RoomStatus};
 use crate::storage::consts::HOW_MUCH_LAST_MESSAGES_TO_STORE;
@@ -172,20 +173,18 @@ impl RoomGameFlowHandler for HashMapRoomsStorage {
                 ROUNDS_PER_GAME => ROUNDS_PER_GAME,
                 _ => ROUNDS_PER_GAME + 1 - rounds_left,
             };
-            let bot_chat_msg = BotMessage::RoundStarted {
-                round_number,
-                rounds_per_game: ROUNDS_PER_GAME,
-            };
-            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
-            let bot_ws_msg = ServerSentSocketMessage::ChatMessage {
-                r#type: message_types::ChatMessage,
-                payload: ServerSentChatMessagePayload {
-                    id: bot_message.id,
-                    from: None,
-                    content: raw_bot_chat_msg,
-                    is_from_bot: true,
+            let bot_message_payload = BotMessagePayload::RoundStarted {
+                r#type: RoundStartedBotMsg,
+                payload: RoundStartedBotMessagePayload {
+                    round_number,
+                    rounds_per_game: ROUNDS_PER_GAME,
                 },
+            };
+            let bot_message = ChatMessage::from_bot(bot_message_payload.clone());
+            let bot_ws_msg = ServerSentSocketMessage::BotMessage {
+                r#type: message_types::BotMessage,
+                id: bot_message.id(),
+                payload: bot_message_payload,
             };
             let raw_bot_ws_msg = serde_json::to_string(&bot_ws_msg).unwrap();
             // TODO: bad because duplicates the `self.add_new_message()` code
@@ -233,7 +232,7 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             .unwrap()
             .users
             .iter()
-            .map(|user| user.description_id)
+            .map(|user| user.description_index)
             .collect::<Vec<_>>();
         let such_user_already_in_the_room = storage_guard
             .get(room_id)
@@ -330,19 +329,17 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
             if removed_user.is_host {
                 storage_guard.get_mut(&room_id).unwrap().reassign_host()
             }
-            let bot_chat_msg = BotMessage::UserDisconnected {
-                username: &removed_user.name,
-            };
-            let raw_bot_chat_msg = bot_chat_msg.to_human_readable();
-            let bot_message = ChatMessage::new(true, None, raw_bot_chat_msg.clone());
-            let ws_message = ServerSentSocketMessage::ChatMessage {
-                r#type: message_types::ChatMessage,
-                payload: ServerSentChatMessagePayload {
-                    id: bot_message.id,
-                    from: None,
-                    content: raw_bot_chat_msg,
-                    is_from_bot: true,
+            let bot_message_payload = BotMessagePayload::UserDisconnected {
+                r#type: UserDisconnectedBotMsg,
+                payload: UserDisconnectedBotMessagePayload {
+                    username: removed_user.name,
                 },
+            };
+            let bot_message = ChatMessage::from_bot(bot_message_payload.clone());
+            let ws_message = ServerSentSocketMessage::BotMessage {
+                r#type: message_types::BotMessage,
+                id: bot_message.id(),
+                payload: bot_message_payload,
             };
             let bot_message_content = serde_json::to_string(&ws_message).unwrap();
             let mut all_sockets_ids = relevant_socket_ids.clone();

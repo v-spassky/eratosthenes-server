@@ -13,9 +13,7 @@ pub struct User {
     pub avatar_emoji: String,
     pub score: u64,
     pub is_host: bool,
-    pub description: String,
-    #[serde(skip_serializing)]
-    pub description_id: usize,
+    pub description_index: usize,
     #[serde(skip_serializing)]
     pub socket_id: Option<usize>,
     pub last_guess: Option<LatLng>,
@@ -34,7 +32,7 @@ impl User {
         desc_exclusion_list: Vec<usize>,
         socket_id: usize,
     ) -> Self {
-        let (description_id, description) = descriptions::random_except_these(desc_exclusion_list);
+        let description_index = descriptions::random_except_these(desc_exclusion_list);
         User {
             private_id,
             public_id,
@@ -42,8 +40,7 @@ impl User {
             avatar_emoji,
             score: 0,
             is_host: room_has_no_members,
-            description,
-            description_id,
+            description_index,
             socket_id: Some(socket_id),
             last_guess: None,
             submitted_guess: false,

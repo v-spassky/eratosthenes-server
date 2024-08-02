@@ -3,8 +3,11 @@ use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::storage::consts::HOW_MUCH_LAST_MESSAGES_TO_STORE;
 use crate::users::models::User;
 use serde::Serialize;
+use serde_unit_struct::{Deserialize_unit_struct, Serialize_unit_struct};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+use super::message_types::BotMessagePayload;
 
 pub static NEXT_CHAT_MESSAGE_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -103,23 +106,51 @@ pub enum RoomStatus {
 }
 
 #[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChatMessage {
-    pub id: usize,
-    pub is_from_bot: bool,
-    /// `None` if `is_from_bot` is `true`.
-    pub author_name: Option<String>,
-    pub content: String,
+#[serde(untagged)]
+pub enum ChatMessage {
+    FromPlayer {
+        r#type: FromPlayerChatMessage,
+        id: usize,
+        #[serde(rename = "authorName")]
+        author_name: String,
+        content: String,
+    },
+    FromBot {
+        r#type: FromBotChatMessage,
+        id: usize,
+        content: BotMessagePayload,
+    },
 }
 
+#[derive(Clone, Debug, Serialize_unit_struct, Deserialize_unit_struct)]
+pub struct FromPlayerChatMessage;
+
+#[derive(Clone, Debug, Serialize_unit_struct, Deserialize_unit_struct)]
+pub struct FromBotChatMessage;
+
 impl ChatMessage {
-    pub fn new(is_from_bot: bool, author_name: Option<String>, content: String) -> Self {
+    pub fn from_player(author_name: String, content: String) -> Self {
         let id = NEXT_CHAT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
-        ChatMessage {
+        Self::FromPlayer {
+            r#type: FromPlayerChatMessage {},
             id,
-            is_from_bot,
             author_name,
             content,
+        }
+    }
+    pub fn from_bot(content: BotMessagePayload) -> Self {
+        let id = NEXT_CHAT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
+        Self::FromBot {
+            r#type: FromBotChatMessage {},
+            id,
+            content,
+        }
+    }
+
+    pub fn id(&self) -> usize {
+        match self {
+            Self::FromPlayer { id, .. } => *id,
+            Self::FromBot { id, .. } => *id,
         }
     }
 }
