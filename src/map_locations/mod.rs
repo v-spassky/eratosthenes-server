@@ -25,6 +25,5 @@ pub fn estimate_guess(guess: LatLng, target: LatLng) -> u64 {
         + phi_1.cos() * phi_2.cos() * (delta_lambda / 2.0).sin().powi(2);
     let c = 2.0 * (a.sqrt().atan2((1.0 - a).sqrt()));
     let distance = EARTH_RADIUS * c;
-    let score = (1.0 / distance) * 1e8;
-    (score as u64).min(MAX_SCORE)
+    (MAX_SCORE * (1.65_f64).powf(-distance * 1e-6)) as u64
 }
