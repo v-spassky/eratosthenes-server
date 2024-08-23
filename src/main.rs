@@ -13,7 +13,9 @@ use map_locations::models::LatLng;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
+use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::task;
 use tokio::time::Instant;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -41,6 +43,7 @@ async fn main() {
         .marker_field("task")
         .map_marker_to_index("http_request", "http_requests")
         .map_marker_to_index("client_sent_ws_message", "client_sent_ws_messages")
+        .map_marker_to_index("sockets_count", "sockets_counts")
         .with_batch_size(100)
         .build();
     tracing_subscriber::registry()
@@ -48,6 +51,19 @@ async fn main() {
         .init();
 
     let app_context = AppContext::<HashMapRoomsStorage>::default();
+    let app_context_in_sockets_logger = app_context.clone();
+
+    task::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let count = app_context_in_sockets_logger.sockets.count().await;
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            tracing::info!(task = "sockets_count", count = count, timestamp = timestamp);
+        }
+    });
 
     let mut headers = HeaderMap::new();
     headers.insert("Content-Type", HeaderValue::from_static("application/json"));

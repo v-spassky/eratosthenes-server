@@ -53,4 +53,8 @@ impl HashMapClientSocketsStorage {
             }
         }
     }
+
+    pub async fn count(&self) -> usize {
+        self.storage.read().await.len()
+    }
 }

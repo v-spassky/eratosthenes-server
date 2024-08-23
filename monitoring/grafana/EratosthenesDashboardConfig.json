@@ -1,4 +1,57 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_ERATOSTHENES-HTTP-REQUESTS-LOGS",
+      "label": "eratosthenes-http-requests-logs",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "quickwit-quickwit-datasource",
+      "pluginName": "Quickwit"
+    },
+    {
+      "name": "DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES",
+      "label": "eratosthenes-client-sent-ws-messages",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "quickwit-quickwit-datasource",
+      "pluginName": "Quickwit"
+    },
+    {
+      "name": "DS_ERATOSTHENES-SOCKETS-COUNTS",
+      "label": "eratosthenes-sockets-counts",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "quickwit-quickwit-datasource",
+      "pluginName": "Quickwit"
+    }
+  ],
+  "__elements": {},
+  "__requires": [
+    {
+      "type": "panel",
+      "id": "barchart",
+      "name": "Bar chart",
+      "version": ""
+    },
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "11.0.0"
+    },
+    {
+      "type": "datasource",
+      "id": "quickwit-quickwit-datasource",
+      "name": "Quickwit",
+      "version": "0.3.1"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -18,7 +71,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": 4,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -37,7 +90,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "bdsqzafs7e0aoa"
+        "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -132,7 +185,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "bdsqzafs7e0aoa"
+            "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
           },
           "metrics": [
             {
@@ -169,7 +222,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "bdsqzafs7e0aoa"
+        "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -315,7 +368,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "bdsqzafs7e0aoa"
+            "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
           },
           "metrics": [
             {
@@ -342,7 +395,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "bdsqzafs7e0aoa"
+        "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -433,7 +486,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "bdsqzafs7e0aoa"
+            "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
           },
           "metrics": [
             {
@@ -454,7 +507,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "bdsqzafs7e0aoa"
+        "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -545,7 +598,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "bdsqzafs7e0aoa"
+            "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
           },
           "metrics": [
             {
@@ -564,7 +617,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "bdsqzafs7e0aoa"
+        "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
       },
       "fieldConfig": {
         "defaults": {
@@ -655,7 +708,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "bdsqzafs7e0aoa"
+            "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
           },
           "metrics": [
             {
@@ -687,7 +740,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "fdsxew3el9xq8f"
+        "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
       },
       "description": "",
       "fieldConfig": {
@@ -783,7 +836,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "fdsxew3el9xq8f"
+            "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
           },
           "metrics": [
             {
@@ -820,7 +873,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "fdsxew3el9xq8f"
+        "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
       },
       "fieldConfig": {
         "defaults": {
@@ -966,7 +1019,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "fdsxew3el9xq8f"
+            "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
           },
           "metrics": [
             {
@@ -993,7 +1046,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "fdsxew3el9xq8f"
+        "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1084,7 +1137,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "fdsxew3el9xq8f"
+            "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
           },
           "metrics": [
             {
@@ -1105,7 +1158,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "fdsxew3el9xq8f"
+        "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1196,7 +1249,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "fdsxew3el9xq8f"
+            "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
           },
           "metrics": [
             {
@@ -1215,7 +1268,7 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
-        "uid": "fdsxew3el9xq8f"
+        "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
       },
       "fieldConfig": {
         "defaults": {
@@ -1306,7 +1359,7 @@
           ],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
-            "uid": "fdsxew3el9xq8f"
+            "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
           },
           "metrics": [
             {
@@ -1321,6 +1374,121 @@
       ],
       "title": "Most active IPs (WS messages)",
       "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "quickwit-quickwit-datasource",
+        "uid": "${DS_ERATOSTHENES-SOCKETS-COUNTS}"
+      },
+      "description": "",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": 10000,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "maxHeight": 600,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "alias": "",
+          "bucketAggs": [
+            {
+              "field": "timestamp",
+              "id": "2",
+              "settings": {
+                "interval": "1m"
+              },
+              "type": "date_histogram"
+            }
+          ],
+          "datasource": {
+            "type": "quickwit-quickwit-datasource",
+            "uid": "${DS_ERATOSTHENES-SOCKETS-COUNTS}"
+          },
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "task:sockets_count",
+          "refId": "A",
+          "timeField": "timestamp"
+        }
+      ],
+      "title": "Total sockets count",
+      "type": "timeseries"
     }
   ],
   "refresh": "10s",
@@ -1330,7 +1498,7 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-3h",
     "to": "now"
   },
   "timeRangeUpdatedDuringEditOrView": false,
@@ -1338,6 +1506,6 @@
   "timezone": "browser",
   "title": "Eratosthenes",
   "uid": "bdsn05p73dse8e",
-  "version": 22,
+  "version": 24,
   "weekStart": ""
 }
