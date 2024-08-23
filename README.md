@@ -10,6 +10,10 @@
 ./quickwit index create --index-config .../eratosthenes-server/monitoring/quickwit/client_sent_ws_messages.yaml
 ```
 
+```bash
+./quickwit index create --index-config .../eratosthenes-server/monitoring/quickwit/sockets_counts.yaml
+```
+
 Having thq Quickwit server up and running, launch the project like this:
 
 ```bash
@@ -19,7 +23,7 @@ cargo run -- --quickwit-url http://127.0.0.1:7280
 Or, run with Docker like this (see hwo to build the image below):
 
 ```bash
-docker run --rm -p 3030:3030 my-rust-app --quickwit-url http://127.0.0.1:7280
+docker run --rm -p 3030:3030 eratosthenes-server --quickwit-url http://127.0.0.1:7280
 ```
 
 ### Public deployment
