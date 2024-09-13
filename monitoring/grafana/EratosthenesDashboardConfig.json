@@ -725,6 +725,116 @@
       "type": "barchart"
     },
     {
+      "datasource": {
+        "type": "quickwit-quickwit-datasource",
+        "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "id": 17,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "maxHeight": 600,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "private_id",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "alias": "",
+          "bucketAggs": [
+            {
+              "field": "private_id",
+              "id": "2",
+              "settings": {
+                "min_doc_count": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "size": "5"
+              },
+              "type": "terms"
+            }
+          ],
+          "datasource": {
+            "type": "quickwit-quickwit-datasource",
+            "uid": "${DS_ERATOSTHENES-HTTP-REQUESTS-LOGS}"
+          },
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "task:http_request",
+          "refId": "A",
+          "timeField": "timestamp"
+        }
+      ],
+      "title": "Most active private IDs (HTTP requests)",
+      "type": "barchart"
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -1378,6 +1488,116 @@
     {
       "datasource": {
         "type": "quickwit-quickwit-datasource",
+        "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "fieldMinMax": false,
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 12,
+        "x": 12,
+        "y": 47
+      },
+      "id": 18,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.95,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "maxHeight": 600,
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "private_id",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 0
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "alias": "",
+          "bucketAggs": [
+            {
+              "field": "private_id",
+              "id": "2",
+              "settings": {
+                "min_doc_count": "1",
+                "order": "desc",
+                "orderBy": "1",
+                "size": "5"
+              },
+              "type": "terms"
+            }
+          ],
+          "datasource": {
+            "type": "quickwit-quickwit-datasource",
+            "uid": "${DS_ERATOSTHENES-CLIENT-SENT-WS-MESSAGES}"
+          },
+          "metrics": [
+            {
+              "id": "1",
+              "type": "count"
+            }
+          ],
+          "query": "task:client_sent_ws_message",
+          "refId": "A",
+          "timeField": "timestamp"
+        }
+      ],
+      "title": "Most active private IDs (WS messages)",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "quickwit-quickwit-datasource",
         "uid": "${DS_ERATOSTHENES-SOCKETS-COUNTS}"
       },
       "description": "",
@@ -1436,13 +1656,26 @@
             ]
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "count"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Count"
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 9,
         "w": 12,
-        "x": 12,
-        "y": 47
+        "x": 0,
+        "y": 56
       },
       "id": 16,
       "options": {
@@ -1462,16 +1695,7 @@
       "targets": [
         {
           "alias": "",
-          "bucketAggs": [
-            {
-              "field": "timestamp",
-              "id": "2",
-              "settings": {
-                "interval": "1m"
-              },
-              "type": "date_histogram"
-            }
-          ],
+          "bucketAggs": [],
           "datasource": {
             "type": "quickwit-quickwit-datasource",
             "uid": "${DS_ERATOSTHENES-SOCKETS-COUNTS}"
@@ -1479,7 +1703,10 @@
           "metrics": [
             {
               "id": "1",
-              "type": "count"
+              "settings": {
+                "size": "100"
+              },
+              "type": "raw_data"
             }
           ],
           "query": "task:sockets_count",
@@ -1498,7 +1725,7 @@
     "list": []
   },
   "time": {
-    "from": "now-3h",
+    "from": "now-30m",
     "to": "now"
   },
   "timeRangeUpdatedDuringEditOrView": false,
@@ -1506,6 +1733,6 @@
   "timezone": "browser",
   "title": "Eratosthenes",
   "uid": "bdsn05p73dse8e",
-  "version": 24,
+  "version": 26,
   "weekStart": ""
 }

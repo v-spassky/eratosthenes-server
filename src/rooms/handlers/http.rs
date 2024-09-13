@@ -7,16 +7,16 @@ use crate::rooms::handlers::responses::{
 use crate::storage::interface::IRoomStorage;
 use unicode_segmentation::UnicodeSegmentation;
 
-pub struct RoomHttpHandler<RS: IRoomStorage> {
+pub struct RoomHttpHandler<'a, RS: IRoomStorage> {
     app_context: AppContext<RS>,
-    request_context: RequestContext,
+    request_context: &'a RequestContext,
 }
 
-impl<RS> RoomHttpHandler<RS>
+impl<'a, RS> RoomHttpHandler<'a, RS>
 where
     RS: IRoomStorage,
 {
-    pub fn new(app_context: AppContext<RS>, request_context: RequestContext) -> Self {
+    pub fn new(app_context: AppContext<RS>, request_context: &'a RequestContext) -> Self {
         Self {
             app_context,
             request_context,

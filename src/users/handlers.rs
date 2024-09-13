@@ -8,21 +8,23 @@ use crate::rooms::message_types::{
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
 use crate::users::responses::{
-    BanUserResponse, ChangeScoreResponse, GuessRevocationError, GuessSubmissionError,
+    BanUserResponse, ChangeScoreResponse, GuessRevocationError, GuessError,
     IsUserTheHostResponse, MuteUserResponse, RevokeGuessResponse, ScoreChangeError,
     SubmitGuessResponse, UnmuteUserResponse, UserBanningError, UserMutingError, UserUnmutingError,
 };
 
-pub struct UsersHttpHandler<RS: IRoomStorage> {
+use super::responses::SaveGuessResponse;
+
+pub struct UsersHttpHandler<'a, RS: IRoomStorage> {
     app_context: AppContext<RS>,
-    request_context: RequestContext,
+    request_context: &'a RequestContext,
 }
 
-impl<RS> UsersHttpHandler<RS>
+impl<'a, RS> UsersHttpHandler<'a, RS>
 where
     RS: IRoomStorage,
 {
-    pub fn new(app_context: AppContext<RS>, request_context: RequestContext) -> Self {
+    pub fn new(app_context: AppContext<RS>, request_context: &'a RequestContext) -> Self {
         Self {
             app_context,
             request_context,
@@ -49,6 +51,32 @@ where
         IsUserTheHostResponse { is_host }
     }
 
+    pub async fn save_guess(&self, guess: LatLng) -> SaveGuessResponse {
+        if !self
+            .app_context
+            .rooms
+            .exists(&self.request_context.room_id)
+            .await
+        {
+            return SaveGuessResponse {
+                error: true,
+                error_code: Some(GuessError::RoomNotFound),
+            };
+        }
+        self.app_context
+            .rooms
+            .save_guess(
+                &self.request_context.room_id,
+                &self.request_context.private_id,
+                guess,
+            )
+            .await;
+        SaveGuessResponse {
+            error: false,
+            error_code: None,
+        }
+    }
+
     pub async fn submit_guess(&self, guess: LatLng) -> SubmitGuessResponse {
         if !self
             .app_context
@@ -58,7 +86,7 @@ where
         {
             return SubmitGuessResponse {
                 error: true,
-                error_code: Some(GuessSubmissionError::RoomNotFound),
+                error_code: Some(GuessError::RoomNotFound),
             };
         }
         let round_finished = self

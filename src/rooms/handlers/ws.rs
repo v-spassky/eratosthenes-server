@@ -1,4 +1,5 @@
 use crate::app_context::{AppContext, RequestContext};
+use crate::auth::passcode;
 use crate::logging::consts::DEFAULT_CLIENT_IP;
 use crate::rooms::consts::MAX_MESSAGE_LENGTH;
 use crate::rooms::consts::ROUNDS_PER_GAME;
@@ -14,6 +15,7 @@ use futures_util::{
     stream::{SplitSink, SplitStream},
     SinkExt, StreamExt, TryFutureExt,
 };
+use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
@@ -36,9 +38,18 @@ where
 {
     pub async fn new(
         app_context: AppContext<RS>,
-        request_context: RequestContext,
+        room_id: String,
+        client_ip: Option<SocketAddr>,
+        passcode: String,
         websocket: WebSocket,
     ) -> Self {
+        let jwt_payload = passcode::decode(&passcode).unwrap();
+        let request_context = RequestContext {
+            public_id: jwt_payload.public_id,
+            private_id: jwt_payload.private_id,
+            room_id,
+            client_ip,
+        };
         // Split the socket into a sender and receiver of messages.
         // Use an unbounded channel to handle buffering and flushing of messages to the websocket.
         let (user_ws_tx, user_ws_rx) = websocket.split();
@@ -321,6 +332,7 @@ where
         tracing::info!(
             task = "client_sent_ws_message",
             message_type = message_type,
+            private_id = self.request_context.private_id,
             client_ip = self
                 .request_context
                 .client_ip
@@ -328,7 +340,7 @@ where
                 .ip()
                 .to_string(),
             processing_time_ms = processing_time_ns / 1000,
-            timestamp = timestamp,
+            timestamp,
         );
     }
 

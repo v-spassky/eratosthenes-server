@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct UserIdsQueryParams {
-    pub public_id: String,
-    pub private_id: String,
+pub struct PasscodeQueryParam {
+    pub passcode: String,
 }
 
 #[derive(Serialize, Deserialize)]

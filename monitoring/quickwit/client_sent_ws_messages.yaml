@@ -11,6 +11,9 @@ doc_mapping:
     - name: message_type
       type: text
       fast: true
+    - name: private_id
+      type: text
+      fast: true
     - name: client_ip
       type: ip
       fast: true

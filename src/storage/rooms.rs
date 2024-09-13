@@ -425,6 +425,16 @@ impl UserScoreRepo for HashMapRoomsStorage {
 }
 
 impl UserGuessRepo for HashMapRoomsStorage {
+    async fn save_guess(&self, room_id: &str, private_user_id: &str, guess: LatLng) {
+        let mut storage_guard = self.storage.write().await;
+        let room = storage_guard.get_mut(room_id).unwrap();
+        room.users
+            .iter_mut()
+            .find(|user| user.private_id == *private_user_id)
+            .unwrap()
+            .save_guess(guess);
+    }
+
     async fn submit_guess(&self, room_id: &str, private_user_id: &str, guess: LatLng) -> bool {
         let mut storage_guard = self.storage.write().await;
         let room = storage_guard.get_mut(room_id).unwrap();
