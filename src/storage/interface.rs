@@ -90,6 +90,8 @@ pub trait UserScoreRepo {
 }
 
 pub trait UserGuessRepo {
+    async fn save_guess(&self, room_id: &str, private_user_id: &str, guess: LatLng);
+
     async fn submit_guess(&self, room_id: &str, private_user_id: &str, guess: LatLng) -> bool;
 
     async fn revoke_guess(&self, room_id: &str, private_user_id: &str);

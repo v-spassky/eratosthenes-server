@@ -49,6 +49,10 @@ impl User {
         }
     }
 
+    pub fn save_guess(&mut self, guess: LatLng) {
+        self.last_guess = Some(guess);
+    }
+
     pub fn submit_guess(&mut self, guess: LatLng, room_status: RoomStatus) {
         self.last_guess = Some(guess);
         if let RoomStatus::Playing { .. } = room_status {

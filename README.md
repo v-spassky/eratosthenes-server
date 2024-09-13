@@ -17,13 +17,27 @@
 Having thq Quickwit server up and running, launch the project like this:
 
 ```bash
-cargo run -- --quickwit-url http://127.0.0.1:7280
+cargo run -- --jwt-signing-key yourKeyHere
 ```
 
 Or, run with Docker like this (see hwo to build the image below):
 
 ```bash
-docker run --rm -p 3030:3030 eratosthenes-server --quickwit-url http://127.0.0.1:7280
+docker run --rm -p 3030:3030 eratosthenes-server --jwt-signing-key yourKeyHere
+```
+
+You can delete the indexes (say, to re-create them is schema changes) like this:
+
+```bash
+./quickwit index delete --index http_requests
+```
+
+```bash
+./quickwit index delete --index client_sent_ws_messages
+```
+
+```bash
+./quickwit index delete --index sockets_counts
 ```
 
 ### Public deployment

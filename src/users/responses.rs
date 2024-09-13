@@ -8,15 +8,23 @@ pub struct IsUserTheHostResponse {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SubmitGuessResponse {
+pub struct SaveGuessResponse {
     pub error: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub error_code: Option<GuessSubmissionError>,
+    pub error_code: Option<GuessError>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub enum GuessSubmissionError {
+pub struct SubmitGuessResponse {
+    pub error: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<GuessError>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GuessError {
     RoomNotFound,
 }
 
