@@ -133,7 +133,7 @@ impl QuickwitLoggingTask {
                     }
                     // TODO: provide a user-specified `on_error()` callback here
                     let _response = http_client
-                        .post(&format!("{}api/v1/{}/ingest", quickwit_url, index_id))
+                        .post(format!("{}api/v1/{}/ingest", quickwit_url, index_id))
                         .body(ndjson_body)
                         .send()
                         .await;
@@ -146,7 +146,7 @@ impl QuickwitLoggingTask {
                     serialize_to_ndjson(&mut ndjson_body, log).unwrap();
                 }
                 let _response = http_client
-                    .post(&format!("{}api/v1/{}/ingest", quickwit_url, index_id))
+                    .post(format!("{}api/v1/{}/ingest", quickwit_url, index_id))
                     .body(ndjson_body)
                     .send()
                     .await;
@@ -228,5 +228,5 @@ where
     V: ?Sized + Serialize,
 {
     serde_json::to_writer(&mut writer, value)?;
-    writer.write_all(&[b'\n'])
+    writer.write_all(b"\n")
 }
