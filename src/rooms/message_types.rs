@@ -5,25 +5,32 @@ use serde_unit_struct::{Deserialize_unit_struct, Serialize_unit_struct};
 #[serde(untagged)]
 pub enum ClientSentSocketMessage {
     ChatMessage {
+        #[allow(dead_code)]
+        // This field is actually being pattern-matched on. Same for other variants.
         r#type: ChatMessage,
         payload: ClientSentChatMessagePayload,
     },
     UserConnected {
+        #[allow(dead_code)]
         r#type: UserConnected,
         payload: BriefUserInfoPayload,
     },
     UserReConnected {
+        #[allow(dead_code)]
         r#type: UserReConnected,
         payload: BriefUserInfoPayload,
     },
     UserDisconnected {
+        #[allow(dead_code)]
         r#type: UserDisconnected,
         payload: BriefUserInfoPayload,
     },
     RoundStarted {
+        #[allow(dead_code)]
         r#type: RoundStarted,
     },
     Ping {
+        #[allow(dead_code)]
         r#type: Ping,
     },
 }
