@@ -22,6 +22,7 @@ tokio-stream = "0.1.14"
 tracing = "0.1.40"
 tracing-core = "0.1.32"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt", "time"] }
+tracing_quickwit = { git = "https://github.com/v-spassky/tracing_quickwit", version = "0.1.0" }
 unicode-segmentation = "1.11.0"
 url = "2.5.2"
 warp = "0.3.6"
