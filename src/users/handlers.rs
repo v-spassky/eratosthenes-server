@@ -8,9 +8,9 @@ use crate::rooms::message_types::{
 use crate::rooms::models::ChatMessage;
 use crate::storage::interface::IRoomStorage;
 use crate::users::responses::{
-    BanUserResponse, ChangeScoreResponse, GuessRevocationError, GuessError,
-    IsUserTheHostResponse, MuteUserResponse, RevokeGuessResponse, ScoreChangeError,
-    SubmitGuessResponse, UnmuteUserResponse, UserBanningError, UserMutingError, UserUnmutingError,
+    BanUserResponse, ChangeScoreResponse, GuessError, GuessRevocationError, IsUserTheHostResponse,
+    MuteUserResponse, RevokeGuessResponse, ScoreChangeError, SubmitGuessResponse,
+    UnmuteUserResponse, UserBanningError, UserMutingError, UserUnmutingError,
 };
 
 use super::responses::SaveGuessResponse;
