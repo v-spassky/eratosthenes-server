@@ -36,5 +36,10 @@ pub fn room_chat(
                 })
             }
         })
-        .with(CORS_POLICY.clone())
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }

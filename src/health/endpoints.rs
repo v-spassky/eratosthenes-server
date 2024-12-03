@@ -36,6 +36,16 @@ pub fn healthcheck() -> impl Filter<Extract = (impl Reply,), Error = Rejection> 
                 StatusCode::OK,
             ))
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }

@@ -70,8 +70,18 @@ pub fn can_connect_to_room(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
 
 pub fn is_host(
@@ -127,6 +137,16 @@ pub fn is_host(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }

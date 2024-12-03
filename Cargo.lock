@@ -638,7 +638,6 @@ dependencies = [
  "futures-util",
  "hmac",
  "jwt",
- "once_cell",
  "rand",
  "reqwest",
  "serde",

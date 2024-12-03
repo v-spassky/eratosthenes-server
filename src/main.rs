@@ -20,7 +20,9 @@ async fn main() {
     logging::init(&args);
     tracing::info!("Initialized logging layers.");
     auth::init(&args);
-    tracing::info!("Initialized JWT signing key.");
+    tracing::info!("Initialized HMAC code.");
+    http::init(&args);
+    tracing::info!("Initialized HTTP configuration.");
     let app_context = app_context::init();
     tracing::info!("Initialized app context.");
     let routes = health::endpoints::healthcheck()
@@ -42,7 +44,12 @@ async fn main() {
         .or(rooms::endpoints::room::messages(&app_context))
         .or(rooms::endpoints::room::create(&app_context))
         .or(rooms::endpoints::ws::room_chat(&app_context))
-        .with(CORS_POLICY.clone());
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        );
     tracing::info!("Initialization completed, starting serving...");
     warp::serve(routes).run(args.listen_address).await;
 }

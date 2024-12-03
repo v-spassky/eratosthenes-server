@@ -71,8 +71,18 @@ pub fn mute_user(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
 
 pub fn unmute_user(
@@ -134,8 +144,18 @@ pub fn unmute_user(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
 
 pub fn ban_user(
@@ -197,8 +217,18 @@ pub fn ban_user(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
 
 pub fn change_user_score(
@@ -263,6 +293,16 @@ pub fn change_user_score(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }

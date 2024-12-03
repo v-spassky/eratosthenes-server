@@ -75,8 +75,18 @@ pub fn save_guess(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
 
 pub fn submit_guess(
@@ -141,8 +151,18 @@ pub fn submit_guess(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
 
 pub fn revoke_guess(
@@ -199,6 +219,16 @@ pub fn revoke_guess(
                 }
             }
         })
-        .with(warp::reply::with::headers(RESPONSE_HEADERS.clone()))
-        .with(CORS_POLICY.clone())
+        .with(warp::reply::with::headers(
+            RESPONSE_HEADERS
+                .get()
+                .expect("`RESPONSE_HEADERS` was not initialized.")
+                .clone(),
+        ))
+        .with(
+            CORS_POLICY
+                .get()
+                .expect("`CORS_POLICY` was not initialized.")
+                .clone(),
+        )
 }
