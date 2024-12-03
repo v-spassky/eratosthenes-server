@@ -13,7 +13,7 @@ pub fn decode(passcode: &str) -> Result<JwtPayload, ()> {
         .verify_with_key(
             JWT_SIGNING_KEY
                 .get()
-                .expect("JWT signing key was not initialized!"),
+                .expect("`JWT_SIGNING_KEY` was not initialized."),
         )
         .map_err(|_err| ())
 }
