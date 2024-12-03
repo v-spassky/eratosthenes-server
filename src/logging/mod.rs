@@ -17,8 +17,11 @@ pub fn init(args: &Args) {
             .with_batch_size(100_usize)
             .build();
     tokio::spawn(quickwit_background_client_task);
-    let env_filter =
-        EnvFilter::default().add_directive("eratosthenes_server=info".parse().unwrap());
+    let env_filter = EnvFilter::default().add_directive(
+        "eratosthenes_server=info"
+            .parse()
+            .expect("Failed to parse `EnvFilter` derective."),
+    );
     tracing_subscriber::registry()
         .with(quickwit_logging_layer)
         .with(env_filter)
