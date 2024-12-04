@@ -15,12 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check
-        run: cargo check --verbose
+        run: cargo check
       - name: Format
-        run: cargo fmt --check --verbose
+        run: cargo fmt --check
       - name: Lint
-        run: cargo clippy --verbose
+        run: cargo clippy
       - name: Test
-        run: cargo test --verbose
+        run: cargo test
       - name: Build
-        run: cargo build --verbose
+        run: cargo build
