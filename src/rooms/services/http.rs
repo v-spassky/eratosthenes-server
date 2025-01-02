@@ -1,6 +1,6 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::rooms::consts::MAX_USERNAME_LENGTH;
-use crate::rooms::handlers::responses::{
+use crate::rooms::services::responses::{
     CanConnectToRoomResponse, ConnectionRefusalError, CreateRoomResponse, RoomMessagesResponse,
     RoomMessagesResponseError, RoomUsersResponse, RoomUsersResponseError,
 };

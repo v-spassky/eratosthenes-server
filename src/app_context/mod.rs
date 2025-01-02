@@ -1,7 +1,7 @@
 use crate::storage::interface::IRoomStorage;
 use crate::storage::rooms::HashMapRoomsStorage;
 use crate::storage::sockets::HashMapClientSocketsStorage;
-use std::net::SocketAddr;
+// use std::net::SocketAddr;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task;
@@ -12,11 +12,13 @@ pub struct AppContext<RS: IRoomStorage> {
     pub sockets: HashMapClientSocketsStorage,
 }
 
+#[derive(Clone)]
+
 pub struct RequestContext {
     pub public_id: String,
     pub private_id: String,
     pub room_id: String,
-    pub client_ip: Option<SocketAddr>,
+    // pub client_ip: Option<SocketAddr>,
 }
 
 pub fn init() -> AppContext<HashMapRoomsStorage> {

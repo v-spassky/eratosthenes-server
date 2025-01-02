@@ -1,20 +1,11 @@
+use crate::auth::extractors::User;
 use crate::auth::responses::DecodeIdResponse;
+use axum::response::Json;
 
-use crate::auth::passcode::JwtPayload;
-
-pub struct AuthHttpHandler {
-    jwt_payload: JwtPayload,
-}
-
-impl AuthHttpHandler {
-    pub fn new(jwt_payload: JwtPayload) -> Self {
-        Self { jwt_payload }
-    }
-
-    pub async fn acquire_passcode(self) -> DecodeIdResponse {
-        DecodeIdResponse {
-            error: false,
-            public_id: Some(self.jwt_payload.public_id),
-        }
-    }
+#[axum::debug_handler]
+pub async fn decode_passcode(user: User) -> Json<DecodeIdResponse> {
+    Json(DecodeIdResponse {
+        error: false,
+        public_id: user.public_id,
+    })
 }

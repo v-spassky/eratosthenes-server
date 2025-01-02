@@ -5,8 +5,6 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 
-pub mod consts;
-
 pub fn init(args: &Args) {
     let (quickwit_logging_layer, quickwit_background_client_task) =
         QuickwitLoggingLayerBuilder::new(args.quickwit_url.clone())

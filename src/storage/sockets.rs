@@ -1,8 +1,8 @@
+use axum::extract::ws::Message;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
-use warp::ws::Message;
 
 pub static NEXT_SOCKET_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -29,7 +29,7 @@ impl HashMapClientSocketsStorage {
             .await
             .get(&socket_id)
             .unwrap()
-            .send(Message::text(msg))
+            .send(Message::from(msg))
         {
             // The tx is disconnected, our `user_disconnected` code
             // should be happening in another task, nothing more to
@@ -42,7 +42,7 @@ impl HashMapClientSocketsStorage {
     pub async fn broadcast_msg(&self, msg: &str, sockets_ids: &[Option<usize>]) {
         for (&uid, tx) in self.storage.read().await.iter() {
             if sockets_ids.contains(&Some(uid)) {
-                if let Err(_disconnected) = tx.send(Message::text(msg)) {
+                if let Err(_disconnected) = tx.send(Message::from(msg)) {
                     // The tx is disconnected, our `user_disconnected` code
                     // should be happening in another task, nothing more to
                     // do here.

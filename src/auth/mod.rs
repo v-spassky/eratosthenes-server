@@ -3,7 +3,7 @@ use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use std::sync::OnceLock;
 
-pub mod endpoints;
+pub mod extractors;
 pub mod handlers;
 pub mod passcode;
 pub mod responses;

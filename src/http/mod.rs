@@ -1,33 +1,26 @@
-pub mod config;
+pub mod middleware;
 pub mod query_params;
 
 use crate::cli::Args;
-use config::{CORS_POLICY, RESPONSE_HEADERS};
-use warp::http::header::{HeaderMap, HeaderValue};
-use warp::hyper::Method;
+use http::Method;
+use tower_http::cors::CorsLayer;
 
-pub fn init(_args: &Args) {
-    CORS_POLICY.get_or_init(|| {
-        warp::cors()
-            .allow_origin("http://127.0.0.1:3000")
-            .allow_origin("http://localhost:3000")
-            .allow_origin("https://eratosthenes.vercel.app/")
-            .allow_headers(vec![
-                "User-Agent",
-                "Sec-Fetch-Mode",
-                "Referer",
-                "Origin",
-                "Access-Control-Request-Method",
-                "Access-Control-Request-Headers",
-                "content-type",
-                "Passcode",
-            ])
-            .allow_methods(&[Method::POST, Method::GET, Method::OPTIONS])
-            .build()
-    });
-    RESPONSE_HEADERS.get_or_init(|| {
-        let mut headers = HeaderMap::new();
-        headers.insert("Content-Type", HeaderValue::from_static("application/json"));
-        headers
-    });
+pub fn init(_args: &Args) -> CorsLayer {
+    CorsLayer::new()
+        .allow_origin([
+            "http://127.0.0.1:3000".parse().unwrap(),
+            "http://localhost:3000".parse().unwrap(),
+            "https://eratosthenes.vercel.app".parse().unwrap(),
+        ])
+        .allow_headers([
+            "User-Agent".parse().unwrap(),
+            "Sec-Fetch-Mode".parse().unwrap(),
+            "Referer".parse().unwrap(),
+            "Origin".parse().unwrap(),
+            "Access-Control-Request-Method".parse().unwrap(),
+            "Access-Control-Request-Headers".parse().unwrap(),
+            "content-type".parse().unwrap(),
+            "Passcode".parse().unwrap(),
+        ])
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
 }

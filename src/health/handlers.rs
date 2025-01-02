@@ -1,13 +1,7 @@
 use crate::health::responses::HealthCheckResponse;
+use axum::response::Json;
 
-pub struct HealthHttpHandler {}
-
-impl HealthHttpHandler {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub async fn healthcheck(&self) -> HealthCheckResponse {
-        HealthCheckResponse { error: false }
-    }
+#[axum::debug_handler]
+pub async fn healthcheck() -> Json<HealthCheckResponse> {
+    Json(HealthCheckResponse { error: false })
 }
