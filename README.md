@@ -1,3 +1,5 @@
+Backend server for a [geoguesser-like web game](https://github.com/v-spassky/eratosthenes-client).
+
 ### Local deployment
 
 [Install and run Quickwit server](https://quickwit.io/docs/get-started/quickstart), then create indexes:
@@ -53,11 +55,11 @@ docker build -t eratosthenes-server .
 ```
 
 ```bash
-docker tag eratosthenes-server gcr.io/chess-project-44320/eratosthenes
+docker tag eratosthenes-server gcr.io/project-id/repo-id
 ```
 
 ```bash
-docker push gcr.io/chess-project-44320/eratosthenes
+docker push gcr.io/project-id/repo-id
 ```
 
 Go to the Google Cloud Console and create a service from the image in the Google Cloud Registry.
