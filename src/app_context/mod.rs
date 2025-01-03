@@ -13,7 +13,6 @@ pub struct AppContext<RS: IRoomStorage> {
 }
 
 #[derive(Clone)]
-
 pub struct RequestContext {
     pub public_id: String,
     pub private_id: String,
