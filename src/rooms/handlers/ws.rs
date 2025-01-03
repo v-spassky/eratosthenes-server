@@ -19,25 +19,33 @@ use axum::extract::ws::WebSocket;
 use axum::extract::{Path, Query, State, WebSocketUpgrade};
 use axum::response::Response;
 use futures_util::{
-    // stream::{SplitSink, SplitStream},
     SinkExt,
     StreamExt,
     TryFutureExt,
 };
-// use std::net::SocketAddr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use unicode_segmentation::UnicodeSegmentation;
 
-#[axum::debug_handler]
+// TODO: make the handler generic over rooms storage
+
 pub async fn ws(
     ws: WebSocketUpgrade,
     Path(room_id): Path<String>,
     Query(query_params): Query<PasscodeQueryParam>,
     State(app_context): State<AppContext<HashMapRoomsStorage>>,
 ) -> Response {
+    // TODO: `ws.on_upgrade` requires the future returned by the closure to be `Send`, so all
+    // futures that it awaits must also be `Send`. Compiler diagnostics:
+    //
+    // help: `std::marker::Send` can be made part of the associated future's guarantees for all
+    // implementations of `RoomConnectionHandler::disconnect_user`
+    // --> src/storage/interface.rs:77:5
+    //
+    // - async fn disconnect_user(...);
+    // + fn disconnect_user(...) -> impl std::future::Future<Output = ()> + std::marker::Send;
     ws.on_upgrade(|socket| handle_socket(socket, room_id, query_params.passcode, app_context))
 }
 
@@ -55,8 +63,6 @@ async fn handle_socket(
         room_id,
         // client_ip,
     };
-    // Split the socket into a sender and receiver of messages.
-    // Use an unbounded channel to handle buffering and flushing of messages to the websocket.
     let (mut user_ws_tx, mut user_ws_rx) = socket.split();
     let (tx, rx) = mpsc::unbounded_channel();
     let mut rx = UnboundedReceiverStream::new(rx);

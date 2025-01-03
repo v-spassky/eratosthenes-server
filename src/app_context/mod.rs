@@ -1,7 +1,6 @@
 use crate::storage::interface::IRoomStorage;
 use crate::storage::rooms::HashMapRoomsStorage;
 use crate::storage::sockets::HashMapClientSocketsStorage;
-// use std::net::SocketAddr;
 use std::time::Duration;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::task;
@@ -9,6 +8,7 @@ use tokio::task;
 #[derive(Clone, Default)]
 pub struct AppContext<RS: IRoomStorage> {
     pub rooms: RS,
+    // TODO: make the struct generic over sockets storage as well?
     pub sockets: HashMapClientSocketsStorage,
 }
 
@@ -18,6 +18,7 @@ pub struct RequestContext {
     pub public_id: String,
     pub private_id: String,
     pub room_id: String,
+    // TODO: add the `client_ip` back so that IP is logges on websocket messages as well
     // pub client_ip: Option<SocketAddr>,
 }
 

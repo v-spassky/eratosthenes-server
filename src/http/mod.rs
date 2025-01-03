@@ -8,6 +8,7 @@ use tower_http::cors::CorsLayer;
 pub fn init(_args: &Args) -> CorsLayer {
     CorsLayer::new()
         .allow_origin([
+            // TODO: this should be configured from outside the program (config file, CLI args)
             "http://127.0.0.1:3000".parse().unwrap(),
             "http://localhost:3000".parse().unwrap(),
             "https://eratosthenes.vercel.app".parse().unwrap(),

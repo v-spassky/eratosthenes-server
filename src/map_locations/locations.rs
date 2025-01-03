@@ -1,3 +1,5 @@
+// TODO: this should be provided from outside the program (use a dedicated file & point CLI
+// argument to it)
 pub static LOCATIONS: [(f64, f64); 17937] = [
     (46.230915533575526, -79.14705276489258),
     (65.87444401469938, 75.09550094604492),

@@ -6,6 +6,8 @@ use crate::storage::rooms::UserConnectedResult;
 use crate::storage::sockets::HashMapClientSocketsStorage;
 use crate::users::models::User;
 
+// TODO: use newtypes fro user ids, room ids etc.
+
 pub trait IRoomStorage:
     RoomRepo
     + RoomGameFlowHandler
