@@ -18,11 +18,7 @@ use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
 use axum::extract::{Path, Query, State, WebSocketUpgrade};
 use axum::response::Response;
-use futures_util::{
-    SinkExt,
-    StreamExt,
-    TryFutureExt,
-};
+use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time::Instant;
