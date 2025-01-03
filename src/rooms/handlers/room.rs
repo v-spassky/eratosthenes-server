@@ -4,25 +4,29 @@ use crate::rooms::services::http::{CreateRoomHttpHandler, RoomHttpHandler};
 use crate::rooms::services::responses::{
     CreateRoomResponse, RoomMessagesResponse, RoomUsersResponse,
 };
-use crate::storage::rooms::HashMapRoomsStorage;
+use crate::storage::interface::IRoomStorage;
 use axum::extract::{Path, State};
 use axum::response::Json;
 
-#[axum::debug_handler]
-pub async fn create(
+pub async fn create<RS>(
     _user: User,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<CreateRoomResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<CreateRoomResponse>
+where
+    RS: IRoomStorage,
+{
     let response = CreateRoomHttpHandler::new(app_context).create().await;
     Json(response)
 }
 
-#[axum::debug_handler]
-pub async fn users(
+pub async fn users<RS>(
     user: User,
     Path(room_id): Path<String>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<RoomUsersResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<RoomUsersResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,
@@ -35,12 +39,14 @@ pub async fn users(
     Json(response)
 }
 
-#[axum::debug_handler]
-pub async fn messages(
+pub async fn messages<RS>(
     user: User,
     Path(room_id): Path<String>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<RoomMessagesResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<RoomMessagesResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,

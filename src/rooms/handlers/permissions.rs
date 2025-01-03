@@ -3,19 +3,21 @@ use crate::auth::extractors::User;
 use crate::http::query_params::UsernameQueryParam;
 use crate::rooms::services::http::RoomHttpHandler;
 use crate::rooms::services::responses::CanConnectToRoomResponse;
-use crate::storage::rooms::HashMapRoomsStorage;
+use crate::storage::interface::IRoomStorage;
 use crate::users::handlers::UsersHttpHandler;
 use crate::users::responses::IsUserTheHostResponse;
 use axum::extract::{Path, Query, State};
 use axum::response::Json;
 
-#[axum::debug_handler]
-pub async fn can_connect_to_room(
+pub async fn can_connect_to_room<RS>(
     user: User,
     Path(room_id): Path<String>,
     Query(query_params): Query<UsernameQueryParam>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<CanConnectToRoomResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<CanConnectToRoomResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,
@@ -28,12 +30,14 @@ pub async fn can_connect_to_room(
     Json(response)
 }
 
-#[axum::debug_handler]
-pub async fn is_host(
+pub async fn is_host<RS>(
     user: User,
     Path(room_id): Path<String>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<IsUserTheHostResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<IsUserTheHostResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,

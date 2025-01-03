@@ -1,6 +1,6 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::auth::extractors::User;
-use crate::storage::rooms::HashMapRoomsStorage;
+use crate::storage::interface::IRoomStorage;
 use crate::users::handlers::UsersHttpHandler;
 use crate::users::responses::{
     BanUserResponse, ChangeScoreResponse, MuteUserResponse, UnmuteUserResponse,
@@ -10,12 +10,14 @@ use axum::response::Json;
 
 use super::requests::ScoreChangeRequestBody;
 
-#[axum::debug_handler]
-pub async fn mute_user(
+pub async fn mute_user<RS>(
     user: User,
     Path((room_id, user_id)): Path<(String, String)>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<MuteUserResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<MuteUserResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,
@@ -28,12 +30,14 @@ pub async fn mute_user(
     Json(response)
 }
 
-#[axum::debug_handler]
-pub async fn unmute_user(
+pub async fn unmute_user<RS>(
     user: User,
     Path((room_id, user_id)): Path<(String, String)>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<UnmuteUserResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<UnmuteUserResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,
@@ -46,12 +50,14 @@ pub async fn unmute_user(
     Json(response)
 }
 
-#[axum::debug_handler]
-pub async fn ban_user(
+pub async fn ban_user<RS>(
     user: User,
     Path((room_id, user_id)): Path<(String, String)>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
-) -> Json<BanUserResponse> {
+    State(app_context): State<AppContext<RS>>,
+) -> Json<BanUserResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,
@@ -64,13 +70,15 @@ pub async fn ban_user(
     Json(response)
 }
 
-#[axum::debug_handler]
-pub async fn change_user_score(
+pub async fn change_user_score<RS>(
     user: User,
     Path((room_id, user_id)): Path<(String, String)>,
-    State(app_context): State<AppContext<HashMapRoomsStorage>>,
+    State(app_context): State<AppContext<RS>>,
     Json(score): Json<ScoreChangeRequestBody>,
-) -> Json<ChangeScoreResponse> {
+) -> Json<ChangeScoreResponse>
+where
+    RS: IRoomStorage,
+{
     let request_context = RequestContext {
         public_id: user.public_id,
         private_id: user.private_id,
