@@ -75,7 +75,7 @@ async fn main() {
         )
         .nest("/:room-id/users", users_routes)
         .nest("/:room-id/messages", messages_routes)
-        .route("/:room-id/ws", any(rooms::handlers::ws::ws)); // TODO: Breaking change in path here.
+        .route("/:room-id/ws", any(rooms::handlers::ws::ws));
 
     let app = Router::new()
         .nest("/health", health_routes)
