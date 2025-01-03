@@ -37,8 +37,9 @@ pub async fn ws(
     Query(query_params): Query<PasscodeQueryParam>,
     State(app_context): State<AppContext<HashMapRoomsStorage>>,
 ) -> Response {
-    // TODO: `ws.on_upgrade` requires the future returned by the closure to be `Send`, so all
-    // futures that it awaits must also be `Send`. Compiler diagnostics:
+    // TODO: If the handler is made generic over rooms storage, `ws.on_upgrade` requires the future
+    // returned by the closure to be `Send`, so all futures that it awaits must also be `Send`.
+    // Compiler diagnostics:
     //
     // help: `std::marker::Send` can be made part of the associated future's guarantees for all
     // implementations of `RoomConnectionHandler::disconnect_user`
