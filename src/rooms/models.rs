@@ -1,4 +1,4 @@
-use crate::map_locations::{self, models::LatLng};
+use crate::map::{self, models::LatLng};
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::storage::consts::HOW_MUCH_LAST_MESSAGES_TO_STORE;
 use crate::users::models::User;
@@ -31,7 +31,7 @@ impl Room {
     pub fn start_playing(&mut self) {
         let new_game = self.rounds_left == ROUNDS_PER_GAME;
         self.status = RoomStatus::Playing {
-            current_location: map_locations::random(),
+            current_location: map::locations::random(),
         };
         for user in self.users.iter_mut() {
             user.last_guess = None;
@@ -54,7 +54,7 @@ impl Room {
         };
         for user in self.users.iter_mut() {
             if let Some(guess) = user.last_guess {
-                let last_round_score = map_locations::estimate_guess(guess, prev_position);
+                let last_round_score = map::estimate_guess(guess, prev_position);
                 user.last_round_score = Some(last_round_score);
                 user.score += last_round_score;
             } else {

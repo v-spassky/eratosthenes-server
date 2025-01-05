@@ -1,4 +1,4 @@
-use crate::map_locations::models::LatLng;
+use crate::map::models::LatLng;
 use crate::rooms::message_types::BriefUserInfoPayload;
 use crate::rooms::models::{ChatMessage, RoomStatus};
 

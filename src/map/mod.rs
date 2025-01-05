@@ -1,20 +1,9 @@
 use consts::{EARTH_RADIUS, MAX_SCORE};
-use locations::LOCATIONS;
 use models::LatLng;
-use rand::Rng;
 
 pub mod consts;
 pub mod locations;
 pub mod models;
-
-pub fn random() -> LatLng {
-    let mut rng = rand::thread_rng();
-    let index = rng.gen_range(0..LOCATIONS.len());
-    LatLng {
-        lat: LOCATIONS[index].0,
-        lng: LOCATIONS[index].1,
-    }
-}
 
 pub fn estimate_guess(guess: LatLng, target: LatLng) -> u64 {
     let phi_1 = guess.lat * std::f64::consts::PI / 180.0;

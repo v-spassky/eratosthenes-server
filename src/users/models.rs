@@ -1,4 +1,4 @@
-use crate::map_locations::models::LatLng;
+use crate::map::models::LatLng;
 use crate::rooms::models::RoomStatus;
 use crate::users::descriptions;
 use serde::Serialize;

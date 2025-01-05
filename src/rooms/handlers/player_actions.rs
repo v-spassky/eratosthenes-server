@@ -1,6 +1,6 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::auth::extractors::User;
-use crate::map_locations::models::LatLng;
+use crate::map::models::LatLng;
 use crate::storage::interface::IRoomStorage;
 use crate::users::handlers::UsersHttpHandler;
 use crate::users::responses::{RevokeGuessResponse, SaveGuessResponse, SubmitGuessResponse};

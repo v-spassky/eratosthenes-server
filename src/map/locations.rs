@@ -1,6 +1,18 @@
+use crate::map::models::LatLng;
+use rand::Rng;
+
+pub fn random() -> LatLng {
+    let mut rng = rand::thread_rng();
+    let index = rng.gen_range(0..LOCATIONS.len());
+    LatLng {
+        lat: LOCATIONS[index].0,
+        lng: LOCATIONS[index].1,
+    }
+}
+
 // TODO: this should be provided from outside the program (use a dedicated file & point CLI
 // argument to it)
-pub static LOCATIONS: [(f64, f64); 17937] = [
+static LOCATIONS: [(f64, f64); 17937] = [
     (46.230915533575526, -79.14705276489258),
     (65.87444401469938, 75.09550094604492),
     (59.22348146007767, -135.44657707214355),

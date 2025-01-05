@@ -1,4 +1,4 @@
-use crate::map_locations::models::LatLng;
+use crate::map::models::LatLng;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
     self, BotMessagePayload, BriefUserInfoPayload, RoundStartedBotMessagePayload,

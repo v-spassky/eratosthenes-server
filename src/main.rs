@@ -8,7 +8,7 @@ mod cli;
 mod health;
 mod http;
 mod logging;
-mod map_locations;
+mod map;
 mod rooms;
 mod storage;
 mod users;
