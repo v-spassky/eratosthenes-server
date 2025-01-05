@@ -11,7 +11,7 @@ async fn test_decode_good_passcode() {
     let server = test_server();
 
     let response = server
-        .get("/auth/decode-passcode")
+        .get("/auth/passcode/decode")
         .add_header("Passcode", PASSCODE)
         .await;
 
@@ -27,7 +27,7 @@ async fn test_decode_bad_passcode() {
     let server = test_server();
 
     let response = server
-        .get("/auth/decode-passcode")
+        .get("/auth/passcode/decode")
         .add_header("Passcode", "notReallyAPasscode")
         .await;
 
@@ -42,7 +42,7 @@ async fn test_decode_bad_passcode() {
 async fn test_decode_missing_passcode() {
     let server = test_server();
 
-    let response = server.get("/auth/decode-passcode").await;
+    let response = server.get("/auth/passcode/decode").await;
 
     response.assert_status_unauthorized();
     response.assert_json(&PasscodeExtractionError {

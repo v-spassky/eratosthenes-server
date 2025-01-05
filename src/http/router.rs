@@ -12,7 +12,7 @@ pub fn new(args: &Args, app_context: AppContext<HashMapRoomsStorage>) -> Router 
     tracing::info!("Initialized HTTP configuration.");
 
     let health_routes = Router::new().route("/check", get(health::handlers::healthcheck));
-    let auth_routes = Router::new().route("/decode-passcode", get(auth::handlers::decode_passcode));
+    let auth_routes = Router::new().route("/passcode/decode", get(auth::handlers::decode_passcode));
     let users_routes = Router::new()
         .route("/", get(rooms::handlers::room::users))
         .route(
