@@ -2323,7 +2323,7 @@ dependencies = [
 [[package]]
 name = "tracing_quickwit"
 version = "0.1.0"
-source = "git+https://github.com/v-spassky/tracing_quickwit#78f0d7ea3aa37ebf736b909a73f3fc0f5b770fc7"
+source = "git+https://github.com/v-spassky/tracing_quickwit#6563a495e81edf307af8e98a17c3f62d8b2482f3"
 dependencies = [
  "reqwest",
  "serde",

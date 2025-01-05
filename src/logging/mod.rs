@@ -12,7 +12,7 @@ pub fn init(args: &Args) {
             .map_marker_to_index("http_request", "http_requests")
             .map_marker_to_index("client_sent_ws_message", "client_sent_ws_messages")
             .map_marker_to_index("sockets_count", "sockets_counts")
-            .with_batch_size(100_usize)
+            .with_batch_size(100)
             .build();
     tokio::spawn(quickwit_background_client_task);
     let env_filter = EnvFilter::default().add_directive(
