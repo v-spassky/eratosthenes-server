@@ -1,14 +1,14 @@
 use crate::app_context::AppContext;
 use crate::cli::Args;
 use crate::storage::rooms::HashMapRoomsStorage;
-use crate::{auth, health, http, rooms};
+use crate::{auth, health, http::cors, rooms};
 use axum::{
     routing::{any, get, post},
     Router,
 };
 
 pub fn new(args: &Args, app_context: AppContext<HashMapRoomsStorage>) -> Router {
-    let cors_policy = http::init(args);
+    let cors_policy = cors::layer(args);
     tracing::info!("Initialized HTTP configuration.");
 
     let health_routes = Router::new().route("/check", get(health::handlers::healthcheck));
