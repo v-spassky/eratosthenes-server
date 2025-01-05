@@ -1,5 +1,6 @@
-use crate::auth::extractors::{PasscodeExtractionError, PasscodeExtractionReason};
-use crate::auth::responses::DecodeIdResponse;
+use crate::auth::responses::{
+    DecodePasscodeResponse, PasscodeExtractionError, PasscodeExtractionReason,
+};
 use crate::http::tests::test_server;
 
 pub static PASSCODE: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwdWJsaWNfaWQiOiJ0ZXN0UHVibGlj\
@@ -15,7 +16,7 @@ async fn test_decode_good_passcode() {
         .await;
 
     response.assert_status_ok();
-    response.assert_json(&DecodeIdResponse {
+    response.assert_json(&DecodePasscodeResponse {
         error: false,
         public_id: String::from("testPublicId"),
     });
