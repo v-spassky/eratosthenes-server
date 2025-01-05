@@ -1,5 +1,6 @@
 pub mod middleware;
 pub mod query_params;
+pub mod router;
 
 use crate::cli::Args;
 use http::Method;
