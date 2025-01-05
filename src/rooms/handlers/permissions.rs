@@ -1,6 +1,6 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::auth::extractors::User;
-use crate::http::query_params::UsernameQueryParam;
+use crate::http::requests::UsernameQueryParam;
 use crate::rooms::services::http::RoomHttpHandler;
 use crate::rooms::services::responses::CanConnectToRoomResponse;
 use crate::storage::interface::IRoomStorage;

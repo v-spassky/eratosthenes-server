@@ -1,6 +1,6 @@
 use crate::app_context::{AppContext, RequestContext};
 use crate::auth::passcode;
-use crate::http::query_params::PasscodeQueryParam;
+use crate::http::requests::PasscodeQueryParam;
 use crate::rooms::consts::MAX_MESSAGE_LENGTH;
 use crate::rooms::consts::ROUNDS_PER_GAME;
 use crate::rooms::message_types::{
