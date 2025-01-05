@@ -4,7 +4,7 @@ use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
 use axum::http::StatusCode;
 use axum::response::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub struct User {
     pub public_id: String,
@@ -45,14 +45,14 @@ where
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasscodeExtractionError {
     pub error: bool,
     pub reason: PasscodeExtractionReason,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum PasscodeExtractionReason {
     NoPasscodeHeaderProvided,

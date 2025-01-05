@@ -7,6 +7,8 @@ pub mod extractors;
 pub mod handlers;
 pub mod passcode;
 pub mod responses;
+#[cfg(test)]
+pub mod tests;
 
 static JWT_SIGNING_KEY: OnceLock<Hmac<Sha256>> = OnceLock::new();
 

@@ -1,7 +1,8 @@
-use std::net::SocketAddr;
-
 use clap::Parser;
+use std::net::SocketAddr;
 use url::Url;
+#[cfg(test)]
+pub mod tests;
 
 #[derive(Debug, Parser)]
 pub struct Args {
