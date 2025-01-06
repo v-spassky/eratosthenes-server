@@ -1,9 +1,31 @@
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+};
+
+use crate::cli::Args;
 use consts::{EARTH_RADIUS, MAX_SCORE};
+use locations::LOCATIONS;
 use models::LatLng;
 
 pub mod consts;
 pub mod locations;
 pub mod models;
+
+pub fn init(args: &Args) {
+    let locations_file = File::open(&args.locations).expect("Failed to open the locations file.");
+    let file_reader = BufReader::new(locations_file);
+    let mut locations = Vec::new();
+    for line in file_reader.lines() {
+        let maybe_line = line.expect("Failed to read a line in the locations file.");
+        let location: LatLng = serde_json::from_str(&maybe_line)
+            .expect("Failed to deserialize a line in the locations file into a `LatLng`.");
+        locations.push(location);
+    }
+    LOCATIONS
+        .set(locations)
+        .expect("Somehow `LOCATIONS` was set before `init`.");
+}
 
 pub fn estimate_guess(guess: LatLng, target: LatLng) -> u64 {
     let phi_1 = guess.lat * std::f64::consts::PI / 180.0;

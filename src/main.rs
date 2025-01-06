@@ -26,6 +26,9 @@ async fn main() {
     let app_context = app_context::init();
     tracing::info!("Initialized app context.");
 
+    map::init(&args);
+    tracing::info!("Initialized map data.");
+
     let routes = http::router::new(&args, app_context);
 
     let listener = tokio::net::TcpListener::bind(args.listen_address)

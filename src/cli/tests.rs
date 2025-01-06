@@ -1,5 +1,7 @@
 use crate::cli::Args;
-use std::{net::SocketAddr, str::FromStr};
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::str::FromStr;
 use url::Url;
 
 pub fn fake_args() -> Args {
@@ -9,5 +11,6 @@ pub fn fake_args() -> Args {
         listen_address: SocketAddr::from_str("0.0.0.0:3030")
             .expect("Failed co construct fake listen address."),
         jwt_signing_key: String::from("testKey"),
+        locations: PathBuf::new(),
     }
 }

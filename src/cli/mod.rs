@@ -1,5 +1,6 @@
 use clap::Parser;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use url::Url;
 #[cfg(test)]
 pub mod tests;
@@ -14,4 +15,7 @@ pub struct Args {
     pub listen_address: SocketAddr,
     #[arg(long)]
     pub jwt_signing_key: String,
+    #[arg(long)]
+    #[arg(default_value = "locations.example.ndjson")]
+    pub locations: PathBuf,
 }
