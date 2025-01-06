@@ -1,6 +1,5 @@
 use crate::map::models::LatLng;
 use crate::rooms::models::RoomStatus;
-use crate::users::descriptions;
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -13,7 +12,6 @@ pub struct User {
     pub avatar_emoji: String,
     pub score: u64,
     pub is_host: bool,
-    pub description_index: usize,
     #[serde(skip_serializing)]
     pub socket_id: Option<usize>,
     pub last_guess: Option<LatLng>,
@@ -29,10 +27,8 @@ impl User {
         name: String,
         avatar_emoji: String,
         room_has_no_members: bool,
-        desc_exclusion_list: Vec<usize>,
         socket_id: usize,
     ) -> Self {
-        let description_index = descriptions::random_except_these(desc_exclusion_list);
         User {
             private_id,
             public_id,
@@ -40,7 +36,6 @@ impl User {
             avatar_emoji,
             score: 0,
             is_host: room_has_no_members,
-            description_index,
             socket_id: Some(socket_id),
             last_guess: None,
             submitted_guess: false,

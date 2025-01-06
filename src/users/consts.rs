@@ -1,1 +1,0 @@
-pub const NUMBER_OF_USER_DESCRIPTIONS: usize = 44;

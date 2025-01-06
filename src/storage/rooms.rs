@@ -227,13 +227,6 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
     ) -> Result<UserConnectedResult, ()> {
         let mut storage_guard = self.storage.write().await;
         let room_has_no_members = storage_guard.get(room_id).unwrap().users.is_empty();
-        let description_ids_of_room_members = storage_guard
-            .get(room_id)
-            .unwrap()
-            .users
-            .iter()
-            .map(|user| user.description_index)
-            .collect::<Vec<_>>();
         let such_user_already_in_the_room = storage_guard
             .get(room_id)
             .unwrap()
@@ -262,7 +255,6 @@ impl RoomConnectionHandler for HashMapRoomsStorage {
                 msg_payload.username,
                 msg_payload.avatar_emoji,
                 room_has_no_members,
-                description_ids_of_room_members,
                 socket_id,
             ));
         Ok(UserConnectedResult::NewUser)
