@@ -14,15 +14,14 @@ pub async fn tracing(request: Request, next: Next) -> Response {
 
     let start_time = Instant::now();
     let response = next.run(request).await;
-    // TODO: for some reason `.as_millis()` returns `0`
-    let elapsed_time = start_time.elapsed().as_nanos();
+    let elapsed_time_ms = start_time.elapsed().as_millis();
 
     tracing::info!(
         task = "http_request",
         http_method = %method,
         endpoint = %path,
         client_ip = %client_ip,
-        processing_time_ms = elapsed_time / 1000,
+        processing_time_ms = elapsed_time_ms,
     );
 
     response
