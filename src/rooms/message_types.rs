@@ -167,9 +167,11 @@ pub struct Pong;
 pub struct Tick;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ClientSentChatMessagePayload {
     pub from: String,
     pub content: String,
+    pub attachment_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -178,6 +180,7 @@ pub struct ServerSentChatMessagePayload {
     pub id: usize,
     pub from: String,
     pub content: String,
+    pub attachment_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]

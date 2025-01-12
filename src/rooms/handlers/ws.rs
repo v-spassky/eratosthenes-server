@@ -144,14 +144,18 @@ async fn on_new_message(
                 );
                 return;
             }
-            let chat_message =
-                ChatMessage::from_player(payload.from.clone(), payload.content.clone());
+            let chat_message = ChatMessage::from_player(
+                payload.from.clone(),
+                payload.content.clone(),
+                payload.attachment_ids.clone(),
+            );
             let ws_chat_message = ServerSentSocketMessage::ChatMessage {
                 r#type: message_types::ChatMessage,
                 payload: ServerSentChatMessagePayload {
                     id: chat_message.id(),
                     from: payload.from,
                     content: payload.content,
+                    attachment_ids: payload.attachment_ids,
                 },
             };
             let raw_chat_message = serde_json::to_string(&ws_chat_message).unwrap();

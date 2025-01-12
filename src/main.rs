@@ -11,6 +11,7 @@ mod logging;
 mod map;
 mod rooms;
 mod storage;
+mod uploads;
 mod users;
 
 #[tokio::main]

@@ -114,6 +114,8 @@ pub enum ChatMessage {
         #[serde(rename = "authorName")]
         author_name: String,
         content: String,
+        #[serde(rename = "attachmentIds")]
+        attachment_ids: Vec<String>,
     },
     FromBot {
         r#type: FromBotChatMessage,
@@ -129,13 +131,14 @@ pub struct FromPlayerChatMessage;
 pub struct FromBotChatMessage;
 
 impl ChatMessage {
-    pub fn from_player(author_name: String, content: String) -> Self {
+    pub fn from_player(author_name: String, content: String, attachment_ids: Vec<String>) -> Self {
         let id = NEXT_CHAT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
         Self::FromPlayer {
             r#type: FromPlayerChatMessage {},
             id,
             author_name,
             content,
+            attachment_ids,
         }
     }
     pub fn from_bot(content: BotMessagePayload) -> Self {

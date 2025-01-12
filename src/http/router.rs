@@ -1,7 +1,8 @@
 use crate::app_context::AppContext;
 use crate::cli::Args;
 use crate::storage::rooms::HashMapRoomsStorage;
-use crate::{auth, health, http::cors, rooms};
+use crate::{auth, health, http::cors, rooms, uploads};
+use axum::extract::DefaultBodyLimit;
 use axum::{
     routing::{any, get, post},
     Router,
@@ -57,11 +58,16 @@ pub fn new(args: &Args, app_context: AppContext<HashMapRoomsStorage>) -> Router 
         .nest("/:room-id/users", users_routes)
         .nest("/:room-id/messages", messages_routes)
         .route("/:room-id/ws", any(rooms::handlers::ws::ws));
+    let uploads_routes = Router::new()
+        .route("/images", post(uploads::handlers::upload_images))
+        // TODO: make this configurable
+        .layer(DefaultBodyLimit::max(10_000_000));
 
     Router::new()
         .nest("/health", health_routes)
         .nest("/auth", auth_routes)
         .nest("/rooms", rooms_routes)
+        .nest("/uploads", uploads_routes)
         .with_state(app_context)
         .layer(cors_policy)
         .layer(axum::middleware::from_fn(crate::middleware::tracing))
