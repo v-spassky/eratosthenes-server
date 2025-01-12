@@ -200,6 +200,7 @@ async fn on_new_message(
                     },
                 };
                 let raw_ws_event = serde_json::to_string(&ws_event).unwrap();
+                // TODO: `UserConnected` gets sent twice?
                 app_context
                     .rooms
                     .add_message(&request_context.room_id, bot_message)
