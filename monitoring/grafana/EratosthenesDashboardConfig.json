@@ -198,7 +198,7 @@
           "timeField": "timestamp"
         }
       ],
-      "title": "PRS across all HTTP endpoints",
+      "title": "RPS across all HTTP endpoints",
       "transformations": [
         {
           "id": "calculateField",
@@ -959,7 +959,7 @@
           "timeField": "timestamp"
         }
       ],
-      "title": "PRS across all WS message types",
+      "title": "RPS across all WS message types",
       "transformations": [
         {
           "id": "calculateField",
