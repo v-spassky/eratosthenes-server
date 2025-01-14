@@ -20,7 +20,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .save_guess(guess)
@@ -41,7 +40,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .submit_guess(guess)
@@ -61,7 +59,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .revoke_guess()

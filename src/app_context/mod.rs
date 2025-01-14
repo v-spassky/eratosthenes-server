@@ -17,8 +17,6 @@ pub struct RequestContext {
     pub public_id: String,
     pub private_id: String,
     pub room_id: String,
-    // TODO: add the `client_ip` back so that IP is logged on websocket messages as well
-    // pub client_ip: Option<SocketAddr>,
 }
 
 pub fn init() -> AppContext<HashMapRoomsStorage> {

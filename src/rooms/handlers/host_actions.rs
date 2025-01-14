@@ -22,7 +22,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .mute(user_id)
@@ -42,7 +41,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .unmute(user_id)
@@ -62,7 +60,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .ban(user_id)
@@ -83,7 +80,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .change_score(user_id, score.amount)

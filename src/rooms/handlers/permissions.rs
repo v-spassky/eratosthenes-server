@@ -22,7 +22,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = RoomHttpHandler::new(app_context, &request_context)
         .can_connect(query_params.username)
@@ -42,7 +41,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = UsersHttpHandler::new(app_context, &request_context)
         .is_host()

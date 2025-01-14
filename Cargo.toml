@@ -8,6 +8,7 @@ async-trait = "0.1.83"
 aws-config = "1.5.13"
 aws-sdk-s3 = "1.68.0"
 axum = { version = "0.7.9", features = ["macros", "multipart", "ws"] }
+axum-client-ip = "0.7.0"
 axum-test = "16.4.1"
 clap = { version = "4.5.11", features = ["derive"] }
 futures-util = "0.3.30"

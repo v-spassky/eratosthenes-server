@@ -31,7 +31,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = RoomHttpHandler::new(app_context, &request_context)
         .users()
@@ -51,7 +50,6 @@ where
         public_id: user.public_id,
         private_id: user.private_id,
         room_id,
-        // client_ip,
     };
     let response = RoomHttpHandler::new(app_context, &request_context)
         .messages()

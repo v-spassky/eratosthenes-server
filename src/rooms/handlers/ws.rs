@@ -16,8 +16,9 @@ use crate::storage::rooms::HashMapRoomsStorage;
 use crate::storage::rooms::UserConnectedResult;
 use axum::extract::ws::Message;
 use axum::extract::ws::WebSocket;
-use axum::extract::{Path, Query, State, WebSocketUpgrade};
+use axum::extract::{Path, Query, Request, State, WebSocketUpgrade};
 use axum::response::Response;
+use axum_client_ip::InsecureClientIp;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
@@ -32,6 +33,7 @@ pub async fn ws(
     Path(room_id): Path<String>,
     Query(query_params): Query<PasscodeQueryParam>,
     State(app_context): State<AppContext<HashMapRoomsStorage>>,
+    request: Request,
 ) -> Response {
     // TODO: If the handler is made generic over rooms storage, `ws.on_upgrade` requires the future
     // returned by the closure to be `Send`, so all futures that it awaits must also be `Send`.
@@ -43,7 +45,18 @@ pub async fn ws(
     //
     // - async fn disconnect_user(...);
     // + fn disconnect_user(...) -> impl std::future::Future<Output = ()> + std::marker::Send;
-    ws.on_upgrade(|socket| handle_socket(socket, room_id, query_params.passcode, app_context))
+    let client_ip = InsecureClientIp::from(request.headers(), request.extensions())
+        .map(|InsecureClientIp(ip)| ip.to_string())
+        .unwrap_or_else(|_| "127.0.0.1".to_string());
+    ws.on_upgrade(|socket| {
+        handle_socket(
+            socket,
+            room_id,
+            query_params.passcode,
+            app_context,
+            client_ip,
+        )
+    })
 }
 
 async fn handle_socket(
@@ -51,6 +64,7 @@ async fn handle_socket(
     room_id: String,
     passcode: String,
     app_context: AppContext<HashMapRoomsStorage>,
+    client_ip: String,
 ) {
     // TODO: reject if incorrect
     let jwt_payload = passcode::decode(&passcode).unwrap();
@@ -58,7 +72,6 @@ async fn handle_socket(
         public_id: jwt_payload.public_id,
         private_id: jwt_payload.private_id,
         room_id,
-        // client_ip,
     };
     let (mut user_ws_tx, mut user_ws_rx) = socket.split();
     let (tx, rx) = mpsc::unbounded_channel();
@@ -88,6 +101,7 @@ async fn handle_socket(
             request_context.clone(),
             message,
             socket_id,
+            client_ip.clone(),
         )
         .await;
     }
@@ -99,6 +113,7 @@ async fn on_new_message(
     request_context: RequestContext,
     msg: Message,
     socket_id: usize,
+    client_ip: String,
 ) {
     let start_time = Instant::now();
     let timestamp = SystemTime::now()
@@ -326,14 +341,13 @@ async fn on_new_message(
             app_context.sockets.send_msg(&msg, socket_id).await;
         }
     }
-    let processing_time_ns = start_time.elapsed().as_nanos();
+    let processing_time_ms = start_time.elapsed().as_millis();
     tracing::info!(
         task = "client_sent_ws_message",
         message_type = message_type,
         private_id = request_context.private_id,
-        // TODO: fix `client_ip`
-        client_ip = "127.0.0.1",
-        processing_time_ms = processing_time_ns / 1000,
+        client_ip = client_ip,
+        processing_time_ms = processing_time_ms,
         timestamp,
     );
 }
