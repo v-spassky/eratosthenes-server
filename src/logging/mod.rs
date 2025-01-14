@@ -18,7 +18,7 @@ pub fn init(args: &Args) {
     let env_filter = EnvFilter::default().add_directive(
         "eratosthenes_server=info"
             .parse()
-            .expect("Failed to parse `EnvFilter` derective."),
+            .expect("Failed to parse `EnvFilter` directive."),
     );
     tracing_subscriber::registry()
         .with(quickwit_logging_layer)
