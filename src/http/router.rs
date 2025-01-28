@@ -60,6 +60,10 @@ pub fn new(args: &Args, app_context: AppContext<HashMapRoomsStorage>) -> Router 
         .route("/:room-id/ws", any(rooms::handlers::ws::ws));
     let uploads_routes = Router::new()
         .route("/images", post(uploads::handlers::upload_images))
+        .route(
+            "/attachment-links",
+            post(uploads::handlers::attachment_links),
+        )
         // TODO: make this configurable
         .layer(DefaultBodyLimit::max(10_000_000));
 

@@ -1,0 +1,2 @@
+pub const PREVIEW_IMAGE_WIDTH: u32 = 50;
+pub const PREVIEW_IMAGE_HEIGHT: u32 = 30;

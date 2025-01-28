@@ -1,66 +1,84 @@
 use crate::auth::extractors::User;
-use crate::uploads::responses::UploadImageResponse;
-use crate::uploads::S3_CLIENT;
+use crate::uploads::consts::{PREVIEW_IMAGE_HEIGHT, PREVIEW_IMAGE_WIDTH};
+use crate::uploads::img;
+use crate::uploads::requests::AttachmentLinkRequest;
+use crate::uploads::responses::{AttachmentLink, AttachmentLinksResponse, UploadImageResponse};
+use crate::uploads::s3::{S3Client, S3Object, S3ObjectKey};
 use aws_sdk_s3::primitives::ByteStream;
 use axum::extract::Multipart;
 use axum::response::Json;
-use image::imageops::FilterType;
-use image::{ImageFormat, ImageReader};
-use std::io::Cursor;
 
 pub async fn upload_images(_user: User, mut multipart: Multipart) -> Json<UploadImageResponse> {
-    // TODO: The server should generate & return image ids, not the client
+    let mut image_ids = Vec::new();
+
     while let Some(field) = multipart.next_field().await.unwrap() {
-        let image_name = field
-            .name()
-            .expect("Failed to read a field name from a multipart form body.")
-            .to_string();
-        let image_bytes = field
+        let s3_client = S3Client::new();
+        let original_image_key = S3ObjectKey::random();
+        let resized_image_key = S3ObjectKey::preview_for(&original_image_key);
+        image_ids.push(original_image_key.clone().into_inner().to_string());
+        let original_image_bytes = field
             .bytes()
             .await
             .expect("Failed to read multipart form body field contents.");
-        tokio::spawn(async move {
-            // Resize and upload the smaller image version first.
-            let resized_bytes = image_bytes.clone();
-            let original_image_content_length = image_bytes.len();
-            let resized_image_name = format!("{}-preview", &image_name);
-            let image = ImageReader::new(Cursor::new(resized_bytes))
-                .with_guessed_format()
-                .expect("Failed to read image format.")
-                .decode()
-                .expect("Failed to decode image.");
-            let resized_image = image.resize(50, 30, FilterType::Lanczos3);
-            let mut resized_image_bytes_buffer = Cursor::new(Vec::new());
-            resized_image
-                .write_to(&mut resized_image_bytes_buffer, ImageFormat::Png)
-                .expect("Failed to write resized image.");
-            let resized_image_bytes = resized_image_bytes_buffer.into_inner();
-            let resized_content_length = resized_image_bytes.len();
-            let resized_image_bytes_stream = ByteStream::from(resized_image_bytes);
-            S3_CLIENT
-                .put_object()
-                .bucket("ert-chat-message-images")
-                .key(&resized_image_name)
-                .body(resized_image_bytes_stream)
-                .content_type("image/png")
-                .content_length(resized_content_length as i64)
-                .send()
-                .await
-                .expect("Uploading the resized image to S3 failed.");
 
-            // TODO: move operations like this to a dedicated method
-            let original_image_bytes_stream = ByteStream::from(image_bytes);
-            S3_CLIENT
-                .put_object()
-                .bucket("ert-chat-message-images")
-                .key(&image_name)
-                .body(original_image_bytes_stream)
-                .content_type("image/png")
-                .content_length(original_image_content_length as i64)
-                .send()
-                .await
-                .expect("Uploading an image to S3 failed.");
+        tokio::spawn(async move {
+            // Resize and upload the smaller image version first because it is needed by the
+            // frontend immediately after uploading.
+            let resized_image_bytes = img::resize(
+                original_image_bytes.clone(),
+                PREVIEW_IMAGE_WIDTH,
+                PREVIEW_IMAGE_HEIGHT,
+            );
+
+            let resized_image_object = S3Object {
+                size: resized_image_bytes.len() as i64,
+                bytes: ByteStream::from(resized_image_bytes),
+                key: resized_image_key,
+                content_type: "image/png",
+            };
+            let _ = s3_client.put_object(resized_image_object).await;
+
+            let original_image_object = S3Object {
+                size: original_image_bytes.len() as i64,
+                bytes: ByteStream::from(original_image_bytes),
+                key: original_image_key,
+                content_type: "image/png",
+            };
+            let _ = s3_client.put_object(original_image_object).await;
         });
     }
-    Json(UploadImageResponse { error: false })
+
+    Json(UploadImageResponse {
+        error: false,
+        image_ids,
+    })
+}
+
+pub async fn attachment_links(
+    _user: User,
+    Json(payload): Json<AttachmentLinkRequest>,
+) -> Json<AttachmentLinksResponse> {
+    let s3_client = S3Client::new();
+    let mut links = Vec::new();
+
+    for attachment_id in payload.attachment_ids {
+        let key = match uuid::Uuid::parse_str(&attachment_id) {
+            Ok(uuid) => S3ObjectKey::from_uuid(uuid),
+            Err(_) => continue,
+        };
+        match s3_client.generate_presigned_url(&key).await {
+            Ok((full, preview)) => links.push(AttachmentLink { full, preview }),
+            Err(err) => {
+                eprintln!(
+                    "Failed to generate presigned URL for key {}: {:?}",
+                    attachment_id, err
+                );
+            }
+        }
+    }
+
+    Json(AttachmentLinksResponse {
+        error: false,
+        links,
+    })
 }

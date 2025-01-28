@@ -30,6 +30,9 @@ async fn main() {
     map::init(&args);
     tracing::info!("Initialized map data.");
 
+    uploads::init(&args);
+    tracing::info!("Initialized map data.");
+
     let routes = http::router::new(&args, app_context);
 
     let listener = tokio::net::TcpListener::bind(args.listen_address)
